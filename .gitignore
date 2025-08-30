@@ -30,8 +30,13 @@ Thumbs.db
 pgdata/
 .env
 *.bak
-*.sql
 *.dump
+
+# Ignore all .sql by default
+*.sql
+
+# But keep migration files in git
+!db/migrations/*.sql
 
 # Cursor AI
 .cursor/
