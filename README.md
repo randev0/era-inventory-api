@@ -24,3 +24,12 @@ Built with [Go Chi](https://github.com/go-chi/chi) for routing, [pgx](https://gi
 
 ## 📂 Project Structure
 
+
+## 🧩 Migrations
+
+- Run migrations: `docker compose up migrate`
+- Re-run a specific migration manually:
+  - `docker exec -it <db_container> psql -U postgres -d era -f /migrations/0001_inventory.sql`
+- Verify tables exist:
+  - `docker exec -it <db_container> psql -U postgres -d era -c "\dt"`
+
