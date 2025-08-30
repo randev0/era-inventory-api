@@ -1,0 +1,32 @@
+### Health
+GET http://localhost:8080/health
+
+### List
+GET http://localhost:8080/items
+
+### Search + pagination
+GET http://localhost:8080/items?q=Switch&type=switch&site=HQ&page=1&limit=10
+
+### Create
+POST http://localhost:8080/items
+Content-Type: application/json
+
+{
+  "asset_tag": "SW-003",
+  "name": "Access Switch",
+  "device_type": "switch",
+  "site": "HQ",
+  "notes": "Installed at Floor 2"
+}
+
+### Get one
+GET http://localhost:8080/items/2
+
+### Update
+PUT http://localhost:8080/items/2
+Content-Type: application/json
+
+{ "site": "DC Room", "notes": "Relocated" }
+
+### Delete
+DELETE http://localhost:8080/items/2
