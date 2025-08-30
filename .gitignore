@@ -1,3 +1,37 @@
-/app
-/pgdata
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Go build artifacts
+/bin/
+/dist/
+/build/
+
+# Dependency / cache
+vendor/
+*.log
+*.tmp
+
+# IDE/editor settings
+.vscode/
+.idea/
+*.swp
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Docker/Postgres
+pgdata/
 .env
+*.bak
+*.sql
+*.dump
+
+# Cursor AI
+.cursor/
