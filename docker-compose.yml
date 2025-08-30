@@ -1,4 +1,3 @@
-version: "3.9"
 
 services:
   db:
@@ -44,7 +43,8 @@ services:
       PGDATABASE: era
     volumes:
       - ./:/workspace:ro
-    command: ["sh", "-c", "chmod +x db/migrate.sh && db/migrate.sh"]
+    command: ["sh", "db/migrate.sh"]
+
 
 volumes:
   db-data: {}
