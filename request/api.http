@@ -1,3 +1,22 @@
+### Prepare reference data (placeholders)
+# Sites
+POST http://localhost:8080/sites
+Content-Type: application/json
+
+{ "name": "Headquarters", "code": "HQ" }
+
+# Vendors
+POST http://localhost:8080/vendors
+Content-Type: application/json
+
+{ "name": "Acme Corp", "contact": "support@acme.test" }
+
+# Projects
+POST http://localhost:8080/projects
+Content-Type: application/json
+
+{ "name": "Network Refresh", "code": "NR24" }
+
 ### Health
 GET http://localhost:8080/health
 
