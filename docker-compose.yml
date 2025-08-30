@@ -21,7 +21,7 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
 
-  migrate:
+    migrate:
     image: postgres:16
     depends_on:
       - db
@@ -31,7 +31,19 @@ services:
       POSTGRES_DB: era
     volumes:
       - ./db/migrations:/migrations:ro
-    command: ["/bin/sh","-c","until pg_isready -U postgres -h db -d era; do sleep 1; done; for f in /migrations/*.sql; do echo Running $f; psql -U postgres -h db -d era -v ON_ERROR_STOP=1 -f \"$f\"; done; echo 'Migrations done'"]
+    command: >
+      bash -e -c "
+        until pg_isready -h db -U $POSTGRES_USER -d $POSTGRES_DB; do
+          echo 'waiting for db...'; sleep 1;
+        done;
+        for f in /migrations/*.sql; do
+          echo Running $f;
+          PGPASSWORD=$POSTGRES_PASSWORD psql \
+            -h db -U $POSTGRES_USER -d $POSTGRES_DB \
+            -v ON_ERROR_STOP=1 -f \"$f\";
+        done;
+        echo 'Migrations done'
+      "
 
 volumes:
   pgdata:
