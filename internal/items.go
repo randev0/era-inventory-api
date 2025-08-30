@@ -26,6 +26,27 @@ func (s *Server) routes() {
 	r.Post("/items", s.createItem)
 	r.Put("/items/{id}", s.updateItem)
 	r.Delete("/items/{id}", s.deleteItem)
+
+	// Sites
+	r.Get("/sites", s.listSites)
+	r.Get("/sites/{id}", s.getSite)
+	r.Post("/sites", s.createSite)
+	r.Put("/sites/{id}", s.updateSite)
+	r.Delete("/sites/{id}", s.deleteSite)
+
+	// Vendors
+	r.Get("/vendors", s.listVendors)
+	r.Get("/vendors/{id}", s.getVendor)
+	r.Post("/vendors", s.createVendor)
+	r.Put("/vendors/{id}", s.updateVendor)
+	r.Delete("/vendors/{id}", s.deleteVendor)
+
+	// Projects
+	r.Get("/projects", s.listProjects)
+	r.Get("/projects/{id}", s.getProject)
+	r.Post("/projects", s.createProject)
+	r.Put("/projects/{id}", s.updateProject)
+	r.Delete("/projects/{id}", s.deleteProject)
 }
 
 // LIST with basic filters & pagination

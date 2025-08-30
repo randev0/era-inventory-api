@@ -3,19 +3,64 @@
 POST http://localhost:8080/sites
 Content-Type: application/json
 
-{ "name": "Headquarters", "code": "HQ" }
+{ "name": "Headquarters", "location": "HQ Campus", "notes": "Main site" }
 
 # Vendors
 POST http://localhost:8080/vendors
 Content-Type: application/json
 
-{ "name": "Acme Corp", "contact": "support@acme.test" }
+{ "name": "Acme Corp", "email": "support@acme.test", "phone": "+1 555-1234" }
 
 # Projects
 POST http://localhost:8080/projects
 Content-Type: application/json
 
-{ "name": "Network Refresh", "code": "NR24" }
+{ "code": "NR24", "name": "Network Refresh", "description": "Refresh core and access" }
+
+### Sites list
+GET http://localhost:8080/sites
+
+### Site get
+GET http://localhost:8080/sites/1
+
+### Site update (partial)
+PUT http://localhost:8080/sites/1
+Content-Type: application/json
+
+{ "location": "HQ Building A" }
+
+### Site delete
+DELETE http://localhost:8080/sites/1
+
+### Vendors list
+GET http://localhost:8080/vendors
+
+### Vendor get
+GET http://localhost:8080/vendors/1
+
+### Vendor update (partial)
+PUT http://localhost:8080/vendors/1
+Content-Type: application/json
+
+{ "phone": "+1 555-4321" }
+
+### Vendor delete
+DELETE http://localhost:8080/vendors/1
+
+### Projects list
+GET http://localhost:8080/projects
+
+### Project get
+GET http://localhost:8080/projects/1
+
+### Project update (partial)
+PUT http://localhost:8080/projects/1
+Content-Type: application/json
+
+{ "description": "Refresh completed" }
+
+### Project delete
+DELETE http://localhost:8080/projects/1
 
 ### Health
 GET http://localhost:8080/health
