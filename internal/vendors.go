@@ -30,12 +30,16 @@ func (s *Server) listVendors(w http.ResponseWriter, r *http.Request) {
 		arg++
 	}
 
-	sqlStr := `
-		SELECT id, name, email, phone, notes, created_at, updated_at
-		FROM vendors`
+	whereClause := ""
 	if len(clauses) > 0 {
-		sqlStr += " WHERE " + strings.Join(clauses, " AND ")
+		whereClause = " WHERE " + strings.Join(clauses, " AND ")
 	}
+
+	// Build the main query with COUNT(*) OVER() to get total count
+	sqlStr := fmt.Sprintf(`
+		SELECT id, name, email, phone, notes, created_at, updated_at,
+		       COUNT(*) OVER() as total_count
+		FROM vendors%s`, whereClause)
 
 	allowedSort := map[string]string{
 		"id":         "id",
@@ -53,18 +57,18 @@ func (s *Server) listVendors(w http.ResponseWriter, r *http.Request) {
 	}
 	defer rows.Close()
 
-	vendors := []models.Vendor{}
+	vendors := []interface{}{}
+	var totalCount int
 	for rows.Next() {
 		var v models.Vendor
-		if err := rows.Scan(&v.ID, &v.Name, &v.Email, &v.Phone, &v.Notes, &v.CreatedAt, &v.UpdatedAt); err != nil {
+		if err := rows.Scan(&v.ID, &v.Name, &v.Email, &v.Phone, &v.Notes, &v.CreatedAt, &v.UpdatedAt, &totalCount); err != nil {
 			http.Error(w, err.Error(), 500)
 			return
 		}
 		vendors = append(vendors, v)
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(vendors)
+	sendListResponse(w, vendors, totalCount, params)
 }
 
 func (s *Server) getVendor(w http.ResponseWriter, r *http.Request) {
@@ -179,4 +183,3 @@ func (s *Server) deleteVendor(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
-

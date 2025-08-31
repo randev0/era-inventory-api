@@ -68,13 +68,17 @@ func (s *Server) listItems(w http.ResponseWriter, r *http.Request) {
 		arg++
 	}
 
-	sqlStr := `
-		SELECT id, asset_tag, name, manufacturer, model, device_type, site,
-		       installed_at, warranty_end, notes, created_at, updated_at
-		FROM inventory`
+	whereClause := ""
 	if len(clauses) > 0 {
-		sqlStr += " WHERE " + strings.Join(clauses, " AND ")
+		whereClause = " WHERE " + strings.Join(clauses, " AND ")
 	}
+
+	// Build the main query with COUNT(*) OVER() to get total count
+	sqlStr := fmt.Sprintf(`
+		SELECT id, asset_tag, name, manufacturer, model, device_type, site,
+		       installed_at, warranty_end, notes, created_at, updated_at,
+		       COUNT(*) OVER() as total_count
+		FROM inventory%s`, whereClause)
 
 	allowedSort := map[string]string{
 		"id":         "id",
@@ -92,12 +96,14 @@ func (s *Server) listItems(w http.ResponseWriter, r *http.Request) {
 	}
 	defer rows.Close()
 
-	items := []models.Item{}
+	items := []interface{}{}
+	var totalCount int
 	for rows.Next() {
 		var it models.Item
 		if err := rows.Scan(
 			&it.ID, &it.AssetTag, &it.Name, &it.Manufacturer, &it.Model, &it.DeviceType,
 			&it.Site, &it.InstalledAt, &it.WarrantyEnd, &it.Notes, &it.CreatedAt, &it.UpdatedAt,
+			&totalCount,
 		); err != nil {
 			http.Error(w, err.Error(), 500)
 			return
@@ -105,8 +111,7 @@ func (s *Server) listItems(w http.ResponseWriter, r *http.Request) {
 		items = append(items, it)
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(items)
+	sendListResponse(w, items, totalCount, params)
 }
 
 func (s *Server) getItem(w http.ResponseWriter, r *http.Request) {

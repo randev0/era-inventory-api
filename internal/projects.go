@@ -30,12 +30,16 @@ func (s *Server) listProjects(w http.ResponseWriter, r *http.Request) {
 		arg++
 	}
 
-	sqlStr := `
-		SELECT id, code, name, description, created_at, updated_at
-		FROM projects`
+	whereClause := ""
 	if len(clauses) > 0 {
-		sqlStr += " WHERE " + strings.Join(clauses, " AND ")
+		whereClause = " WHERE " + strings.Join(clauses, " AND ")
 	}
+
+	// Build the main query with COUNT(*) OVER() to get total count
+	sqlStr := fmt.Sprintf(`
+		SELECT id, code, name, description, created_at, updated_at,
+		       COUNT(*) OVER() as total_count
+		FROM projects%s`, whereClause)
 
 	allowedSort := map[string]string{
 		"id":         "id",
@@ -53,18 +57,18 @@ func (s *Server) listProjects(w http.ResponseWriter, r *http.Request) {
 	}
 	defer rows.Close()
 
-	projects := []models.Project{}
+	projects := []interface{}{}
+	var totalCount int
 	for rows.Next() {
 		var p models.Project
-		if err := rows.Scan(&p.ID, &p.Code, &p.Name, &p.Description, &p.CreatedAt, &p.UpdatedAt); err != nil {
+		if err := rows.Scan(&p.ID, &p.Code, &p.Name, &p.Description, &p.CreatedAt, &p.UpdatedAt, &totalCount); err != nil {
 			http.Error(w, err.Error(), 500)
 			return
 		}
 		projects = append(projects, p)
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(projects)
+	sendListResponse(w, projects, totalCount, params)
 }
 
 func (s *Server) getProject(w http.ResponseWriter, r *http.Request) {
@@ -184,4 +188,3 @@ func (s *Server) deleteProject(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
-
