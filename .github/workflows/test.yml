@@ -30,9 +30,7 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
 
       - name: Clean Go module cache
-        run: |
-          rm -rf $HOME/go/pkg/mod
-          rm -rf $HOME/.cache/go-build
+        run: go clean -modcache
 
       - name: Cache Go modules
         uses: actions/cache@v3
@@ -99,9 +97,7 @@ jobs:
           sudo apt-get install -y postgresql-client
 
       - name: Clean Go module cache
-        run: |
-          rm -rf $HOME/go/pkg/mod
-          rm -rf $HOME/.cache/go-build
+        run: go clean -modcache
 
       - name: Cache Go modules
         uses: actions/cache@v3
