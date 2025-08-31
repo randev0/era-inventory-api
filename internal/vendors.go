@@ -14,14 +14,15 @@ import (
 
 func (s *Server) listVendors(w http.ResponseWriter, r *http.Request) {
 	params := parseListParams(r)
+	orgID := OrgIDFromContext(r.Context())
 
 	clauses := []string{}
 	args := []interface{}{}
 	arg := 1
 
-	// org filter
+	// org filter - use context value instead of query param
 	clauses = append(clauses, fmt.Sprintf("org_id = $%d", arg))
-	args = append(args, params.orgID)
+	args = append(args, orgID)
 	arg++
 
 	if params.q != "" {
@@ -73,10 +74,12 @@ func (s *Server) listVendors(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) getVendor(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
+	orgID := OrgIDFromContext(r.Context())
+
 	var v models.Vendor
 	err := s.DB.QueryRow(`
 		SELECT id, name, email, phone, notes, created_at, updated_at
-		FROM vendors WHERE id = $1`, id).Scan(&v.ID, &v.Name, &v.Email, &v.Phone, &v.Notes, &v.CreatedAt, &v.UpdatedAt)
+		FROM vendors WHERE id = $1 AND org_id = $2`, id, orgID).Scan(&v.ID, &v.Name, &v.Email, &v.Phone, &v.Notes, &v.CreatedAt, &v.UpdatedAt)
 	if err == sql.ErrNoRows {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
@@ -100,11 +103,13 @@ func (s *Server) createVendor(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	orgID := OrgIDFromContext(r.Context())
+
 	err := s.DB.QueryRow(`
-		INSERT INTO vendors (name, email, phone, notes)
-		VALUES ($1,$2,$3,$4)
+		INSERT INTO vendors (name, email, phone, notes, org_id)
+		VALUES ($1,$2,$3,$4,$5)
 		RETURNING id, name, email, phone, notes, created_at, updated_at
-	`, in.Name, nullIfEmpty(in.Email), nullIfEmpty(in.Phone), nullIfEmpty(in.Notes)).Scan(&in.ID, &in.Name, &in.Email, &in.Phone, &in.Notes, &in.CreatedAt, &in.UpdatedAt)
+	`, in.Name, nullIfEmpty(in.Email), nullIfEmpty(in.Phone), nullIfEmpty(in.Notes), orgID).Scan(&in.ID, &in.Name, &in.Email, &in.Phone, &in.Notes, &in.CreatedAt, &in.UpdatedAt)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
@@ -116,6 +121,8 @@ func (s *Server) createVendor(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) updateVendor(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
+	orgID := OrgIDFromContext(r.Context())
+
 	var in models.Vendor
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
 		http.Error(w, "invalid JSON", 400)
@@ -144,7 +151,7 @@ func (s *Server) updateVendor(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	args := make([]interface{}, 0, len(sets)+1)
+	args := make([]interface{}, 0, len(sets)+2)
 	sqlStr := "UPDATE vendors SET "
 	for i, sset := range sets {
 		if i > 0 {
@@ -153,8 +160,8 @@ func (s *Server) updateVendor(w http.ResponseWriter, r *http.Request) {
 		sqlStr += fmt.Sprintf(sset.sql, i+1)
 		args = append(args, sset.val)
 	}
-	sqlStr += fmt.Sprintf(" WHERE id = $%d RETURNING id, name, email, phone, notes, created_at, updated_at", len(args)+1)
-	args = append(args, id)
+	sqlStr += fmt.Sprintf(" WHERE id = $%d AND org_id = $%d RETURNING id, name, email, phone, notes, created_at, updated_at", len(args)+1, len(args)+2)
+	args = append(args, id, orgID)
 
 	var out models.Vendor
 	if err := s.DB.QueryRow(sqlStr, args...).Scan(&out.ID, &out.Name, &out.Email, &out.Phone, &out.Notes, &out.CreatedAt, &out.UpdatedAt); err != nil {
@@ -171,7 +178,9 @@ func (s *Server) updateVendor(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) deleteVendor(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	res, err := s.DB.Exec(`DELETE FROM vendors WHERE id = $1`, id)
+	orgID := OrgIDFromContext(r.Context())
+
+	res, err := s.DB.Exec(`DELETE FROM vendors WHERE id = $1 AND org_id = $2`, id, orgID)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return

@@ -9,7 +9,6 @@ import (
 
 // listParams holds common query parameters for list endpoints
 type listParams struct {
-	orgID  int64
 	limit  int
 	offset int
 	q      string
@@ -45,17 +44,10 @@ func sendListResponse(w http.ResponseWriter, data []interface{}, total int, para
 	json.NewEncoder(w).Encode(response)
 }
 
-// parseListParams parses org_id, limit, offset, q, and sort from the request
-// Defaults: org_id=1, limit=50 (max 200), offset=0
+// parseListParams parses limit, offset, q, and sort from the request
+// Defaults: limit=50 (max 200), offset=0
 func parseListParams(r *http.Request) listParams {
 	values := r.URL.Query()
-
-	var orgID int64 = 1
-	if s := strings.TrimSpace(values.Get("org_id")); s != "" {
-		if v, err := strconv.ParseInt(s, 10, 64); err == nil && v > 0 {
-			orgID = v
-		}
-	}
 
 	limit := 50
 	if s := strings.TrimSpace(values.Get("limit")); s != "" {
@@ -75,7 +67,6 @@ func parseListParams(r *http.Request) listParams {
 	}
 
 	return listParams{
-		orgID:  orgID,
 		limit:  limit,
 		offset: offset,
 		q:      strings.TrimSpace(values.Get("q")),

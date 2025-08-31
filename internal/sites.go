@@ -14,14 +14,15 @@ import (
 
 func (s *Server) listSites(w http.ResponseWriter, r *http.Request) {
 	params := parseListParams(r)
+	orgID := OrgIDFromContext(r.Context())
 
 	clauses := []string{}
 	args := []interface{}{}
 	arg := 1
 
-	// org filter
+	// org filter - use context value instead of query param
 	clauses = append(clauses, fmt.Sprintf("org_id = $%d", arg))
-	args = append(args, params.orgID)
+	args = append(args, orgID)
 	arg++
 
 	if params.q != "" {
@@ -73,10 +74,12 @@ func (s *Server) listSites(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) getSite(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
+	orgID := OrgIDFromContext(r.Context())
+
 	var sc models.Site
 	err := s.DB.QueryRow(`
 		SELECT id, name, location, notes, created_at, updated_at
-		FROM sites WHERE id = $1`, id).Scan(&sc.ID, &sc.Name, &sc.Location, &sc.Notes, &sc.CreatedAt, &sc.UpdatedAt)
+		FROM sites WHERE id = $1 AND org_id = $2`, id, orgID).Scan(&sc.ID, &sc.Name, &sc.Location, &sc.Notes, &sc.CreatedAt, &sc.UpdatedAt)
 	if err == sql.ErrNoRows {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
@@ -100,11 +103,13 @@ func (s *Server) createSite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	orgID := OrgIDFromContext(r.Context())
+
 	err := s.DB.QueryRow(`
-		INSERT INTO sites (name, location, notes)
-		VALUES ($1,$2,$3)
+		INSERT INTO sites (name, location, notes, org_id)
+		VALUES ($1,$2,$3,$4)
 		RETURNING id, name, location, notes, created_at, updated_at
-	`, in.Name, nullIfEmpty(in.Location), nullIfEmpty(in.Notes)).Scan(&in.ID, &in.Name, &in.Location, &in.Notes, &in.CreatedAt, &in.UpdatedAt)
+	`, in.Name, nullIfEmpty(in.Location), nullIfEmpty(in.Notes), orgID).Scan(&in.ID, &in.Name, &in.Location, &in.Notes, &in.CreatedAt, &in.UpdatedAt)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
@@ -116,6 +121,8 @@ func (s *Server) createSite(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) updateSite(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
+	orgID := OrgIDFromContext(r.Context())
+
 	var in models.Site
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
 		http.Error(w, "invalid JSON", 400)
@@ -141,7 +148,7 @@ func (s *Server) updateSite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	args := make([]interface{}, 0, len(sets)+1)
+	args := make([]interface{}, 0, len(sets)+2)
 	sqlStr := "UPDATE sites SET "
 	for i, sset := range sets {
 		if i > 0 {
@@ -150,8 +157,8 @@ func (s *Server) updateSite(w http.ResponseWriter, r *http.Request) {
 		sqlStr += fmt.Sprintf(sset.sql, i+1)
 		args = append(args, sset.val)
 	}
-	sqlStr += fmt.Sprintf(" WHERE id = $%d RETURNING id, name, location, notes, created_at, updated_at", len(args)+1)
-	args = append(args, id)
+	sqlStr += fmt.Sprintf(" WHERE id = $%d AND org_id = $%d RETURNING id, name, location, notes, created_at, updated_at", len(args)+1, len(args)+2)
+	args = append(args, id, orgID)
 
 	var out models.Site
 	if err := s.DB.QueryRow(sqlStr, args...).Scan(&out.ID, &out.Name, &out.Location, &out.Notes, &out.CreatedAt, &out.UpdatedAt); err != nil {
@@ -168,7 +175,9 @@ func (s *Server) updateSite(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) deleteSite(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	res, err := s.DB.Exec(`DELETE FROM sites WHERE id = $1`, id)
+	orgID := OrgIDFromContext(r.Context())
+
+	res, err := s.DB.Exec(`DELETE FROM sites WHERE id = $1 AND org_id = $2`, id, orgID)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return

@@ -14,14 +14,15 @@ import (
 
 func (s *Server) listProjects(w http.ResponseWriter, r *http.Request) {
 	params := parseListParams(r)
+	orgID := OrgIDFromContext(r.Context())
 
 	clauses := []string{}
 	args := []interface{}{}
 	arg := 1
 
-	// org filter
+	// org filter - use context value instead of query param
 	clauses = append(clauses, fmt.Sprintf("org_id = $%d", arg))
-	args = append(args, params.orgID)
+	args = append(args, orgID)
 	arg++
 
 	if params.q != "" {
@@ -73,10 +74,12 @@ func (s *Server) listProjects(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) getProject(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
+	orgID := OrgIDFromContext(r.Context())
+
 	var p models.Project
 	err := s.DB.QueryRow(`
 		SELECT id, code, name, description, created_at, updated_at
-		FROM projects WHERE id = $1`, id).Scan(&p.ID, &p.Code, &p.Name, &p.Description, &p.CreatedAt, &p.UpdatedAt)
+		FROM projects WHERE id = $1 AND org_id = $2`, id, orgID).Scan(&p.ID, &p.Code, &p.Name, &p.Description, &p.CreatedAt, &p.UpdatedAt)
 	if err == sql.ErrNoRows {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
@@ -100,11 +103,13 @@ func (s *Server) createProject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	orgID := OrgIDFromContext(r.Context())
+
 	err := s.DB.QueryRow(`
-		INSERT INTO projects (code, name, description)
-		VALUES ($1,$2,$3)
+		INSERT INTO projects (code, name, description, org_id)
+		VALUES ($1,$2,$3,$4)
 		RETURNING id, code, name, description, created_at, updated_at
-	`, in.Code, in.Name, nullIfEmpty(in.Description)).Scan(&in.ID, &in.Code, &in.Name, &in.Description, &in.CreatedAt, &in.UpdatedAt)
+	`, in.Code, in.Name, nullIfEmpty(in.Description), orgID).Scan(&in.ID, &in.Code, &in.Name, &in.Description, &in.CreatedAt, &in.UpdatedAt)
 	if err != nil {
 		if strings.Contains(strings.ToLower(err.Error()), "unique") {
 			http.Error(w, "code already exists", http.StatusConflict)
@@ -120,6 +125,8 @@ func (s *Server) createProject(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) updateProject(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
+	orgID := OrgIDFromContext(r.Context())
+
 	var in models.Project
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
 		http.Error(w, "invalid JSON", 400)
@@ -145,7 +152,7 @@ func (s *Server) updateProject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	args := make([]interface{}, 0, len(sets)+1)
+	args := make([]interface{}, 0, len(sets)+2)
 	sqlStr := "UPDATE projects SET "
 	for i, sset := range sets {
 		if i > 0 {
@@ -154,8 +161,8 @@ func (s *Server) updateProject(w http.ResponseWriter, r *http.Request) {
 		sqlStr += fmt.Sprintf(sset.sql, i+1)
 		args = append(args, sset.val)
 	}
-	sqlStr += fmt.Sprintf(" WHERE id = $%d RETURNING id, code, name, description, created_at, updated_at", len(args)+1)
-	args = append(args, id)
+	sqlStr += fmt.Sprintf(" WHERE id = $%d AND org_id = $%d RETURNING id, code, name, description, created_at, updated_at", len(args)+1, len(args)+2)
+	args = append(args, id, orgID)
 
 	var out models.Project
 	if err := s.DB.QueryRow(sqlStr, args...).Scan(&out.ID, &out.Code, &out.Name, &out.Description, &out.CreatedAt, &out.UpdatedAt); err != nil {
@@ -176,7 +183,9 @@ func (s *Server) updateProject(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) deleteProject(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	res, err := s.DB.Exec(`DELETE FROM projects WHERE id = $1`, id)
+	orgID := OrgIDFromContext(r.Context())
+
+	res, err := s.DB.Exec(`DELETE FROM projects WHERE id = $1 AND org_id = $2`, id, orgID)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return

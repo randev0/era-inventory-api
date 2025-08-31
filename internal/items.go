@@ -19,6 +19,9 @@ func (s *Server) routes() {
 	r.Get("/health", func(w http.ResponseWriter, _ *http.Request) { w.Write([]byte("ok")) })
 	r.Get("/dbping", func(w http.ResponseWriter, _ *http.Request) { w.Write([]byte("db: ok")) })
 
+	// Apply RBAC middleware to all routes
+	r.Use(RBACMiddleware)
+
 	// CRUD
 	r.Get("/items", s.listItems)
 	r.Get("/items/{id}", s.getItem)
@@ -51,14 +54,15 @@ func (s *Server) routes() {
 // LIST with basic filters & pagination
 func (s *Server) listItems(w http.ResponseWriter, r *http.Request) {
 	params := parseListParams(r)
+	orgID := OrgIDFromContext(r.Context())
 
 	clauses := []string{}
 	args := []interface{}{}
 	arg := 1
 
-	// org filter
+	// org filter - use context value instead of query param
 	clauses = append(clauses, fmt.Sprintf("org_id = $%d", arg))
-	args = append(args, params.orgID)
+	args = append(args, orgID)
 	arg++
 
 	// optional text search on name/code/sku/serial → map to name or asset_tag
@@ -116,11 +120,13 @@ func (s *Server) listItems(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) getItem(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
+	orgID := OrgIDFromContext(r.Context())
+
 	var it models.Item
 	err := s.DB.QueryRow(`
 		SELECT id, asset_tag, name, manufacturer, model, device_type, site,
 		       installed_at, warranty_end, notes, created_at, updated_at
-		FROM inventory WHERE id = $1`, id).Scan(
+		FROM inventory WHERE id = $1 AND org_id = $2`, id, orgID).Scan(
 		&it.ID, &it.AssetTag, &it.Name, &it.Manufacturer, &it.Model, &it.DeviceType,
 		&it.Site, &it.InstalledAt, &it.WarrantyEnd, &it.Notes, &it.CreatedAt, &it.UpdatedAt,
 	)
@@ -147,11 +153,13 @@ func (s *Server) createItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	orgID := OrgIDFromContext(r.Context())
+
 	err := s.DB.QueryRow(`
-		INSERT INTO inventory (asset_tag, name, manufacturer, model, device_type, site, installed_at, warranty_end, notes)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+		INSERT INTO inventory (asset_tag, name, manufacturer, model, device_type, site, installed_at, warranty_end, notes, org_id)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
 		RETURNING id, created_at, updated_at
-	`, in.AssetTag, in.Name, in.Manufacturer, in.Model, in.DeviceType, in.Site, in.InstalledAt, in.WarrantyEnd, in.Notes).
+	`, in.AssetTag, in.Name, in.Manufacturer, in.Model, in.DeviceType, in.Site, in.InstalledAt, in.WarrantyEnd, in.Notes, orgID).
 		Scan(&in.ID, &in.CreatedAt, &in.UpdatedAt)
 	if err != nil {
 		if strings.Contains(strings.ToLower(err.Error()), "inventory_asset_tag_key") || strings.Contains(strings.ToLower(err.Error()), "unique") {
@@ -168,6 +176,8 @@ func (s *Server) createItem(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) updateItem(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
+	orgID := OrgIDFromContext(r.Context())
+
 	var in models.Item
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
 		http.Error(w, "invalid JSON", 400)
@@ -211,7 +221,7 @@ func (s *Server) updateItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	args := make([]interface{}, 0, len(sets)+1)
+	args := make([]interface{}, 0, len(sets)+2)
 	sqlStr := "UPDATE inventory SET "
 	for i, sset := range sets {
 		if i > 0 {
@@ -220,8 +230,8 @@ func (s *Server) updateItem(w http.ResponseWriter, r *http.Request) {
 		sqlStr += fmt.Sprintf(sset.sql, i+1)
 		args = append(args, sset.val)
 	}
-	sqlStr += fmt.Sprintf(" WHERE id = $%d RETURNING id, asset_tag, name, manufacturer, model, device_type, site, installed_at, warranty_end, notes, created_at, updated_at", len(args)+1)
-	args = append(args, id)
+	sqlStr += fmt.Sprintf(" WHERE id = $%d AND org_id = $%d RETURNING id, asset_tag, name, manufacturer, model, device_type, site, installed_at, warranty_end, notes, created_at, updated_at", len(args)+1, len(args)+2)
+	args = append(args, id, orgID)
 
 	var out models.Item
 	if err := s.DB.QueryRow(sqlStr, args...).Scan(
@@ -245,7 +255,9 @@ func (s *Server) updateItem(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) deleteItem(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	res, err := s.DB.Exec(`DELETE FROM inventory WHERE id = $1`, id)
+	orgID := OrgIDFromContext(r.Context())
+
+	res, err := s.DB.Exec(`DELETE FROM inventory WHERE id = $1 AND org_id = $2`, id, orgID)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
