@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"encoding/json"
 	"net/http"
 	"strconv"
 	"strings"
@@ -13,6 +14,35 @@ type listParams struct {
 	offset int
 	q      string
 	sort   string
+}
+
+// listResponse wraps list data with pagination information
+type listResponse struct {
+	Data []interface{} `json:"data"`
+	Page pageInfo      `json:"page"`
+}
+
+// pageInfo contains pagination metadata
+type pageInfo struct {
+	Limit  int `json:"limit"`
+	Offset int `json:"offset"`
+	Total  int `json:"total"`
+}
+
+// sendListResponse sends a JSON response wrapped in the standard list envelope
+func sendListResponse(w http.ResponseWriter, data []interface{}, total int, params listParams) {
+	w.Header().Set("Content-Type", "application/json")
+
+	response := listResponse{
+		Data: data,
+		Page: pageInfo{
+			Limit:  params.limit,
+			Offset: params.offset,
+			Total:  total,
+		},
+	}
+
+	json.NewEncoder(w).Encode(response)
 }
 
 // parseListParams parses org_id, limit, offset, q, and sort from the request
@@ -95,4 +125,3 @@ func buildOrderBy(sortParam string, allowed map[string]string) string {
 	}
 	return " ORDER BY " + strings.Join(clauses, ", ")
 }
-

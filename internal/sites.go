@@ -30,12 +30,16 @@ func (s *Server) listSites(w http.ResponseWriter, r *http.Request) {
 		arg++
 	}
 
-	sqlStr := `
-		SELECT id, name, location, notes, created_at, updated_at
-		FROM sites`
+	whereClause := ""
 	if len(clauses) > 0 {
-		sqlStr += " WHERE " + strings.Join(clauses, " AND ")
+		whereClause = " WHERE " + strings.Join(clauses, " AND ")
 	}
+
+	// Build the main query with COUNT(*) OVER() to get total count
+	sqlStr := fmt.Sprintf(`
+		SELECT id, name, location, notes, created_at, updated_at,
+		       COUNT(*) OVER() as total_count
+		FROM sites%s`, whereClause)
 
 	allowedSort := map[string]string{
 		"id":         "id",
@@ -53,18 +57,18 @@ func (s *Server) listSites(w http.ResponseWriter, r *http.Request) {
 	}
 	defer rows.Close()
 
-	sites := []models.Site{}
+	sites := []interface{}{}
+	var totalCount int
 	for rows.Next() {
 		var sc models.Site
-		if err := rows.Scan(&sc.ID, &sc.Name, &sc.Location, &sc.Notes, &sc.CreatedAt, &sc.UpdatedAt); err != nil {
+		if err := rows.Scan(&sc.ID, &sc.Name, &sc.Location, &sc.Notes, &sc.CreatedAt, &sc.UpdatedAt, &totalCount); err != nil {
 			http.Error(w, err.Error(), 500)
 			return
 		}
 		sites = append(sites, sc)
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(sites)
+	sendListResponse(w, sites, totalCount, params)
 }
 
 func (s *Server) getSite(w http.ResponseWriter, r *http.Request) {
@@ -187,4 +191,3 @@ func nullIfEmpty(s *string) interface{} {
 	}
 	return *s
 }
-
