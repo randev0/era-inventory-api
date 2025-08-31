@@ -63,8 +63,8 @@ _Last updated: December 2024_
 - [x] **Testing and validation** of authentication flows ✅
 - [x] Enhanced error handling and user experience ✅
 - [x] Configuration validation and security hardening ✅
+- [ ] **M3.5 - OpenAPI Documentation** (Starting next)
 - [ ] (Optional) Postgres RLS with `app.current_org_id`
-- [ ] OpenAPI spec + Swagger UI at `/docs`
 
 ## 4) Next Up 🎯
 - [x] **Complete M3**: Test JWT authentication end-to-end ✅
@@ -81,7 +81,7 @@ _Last updated: December 2024_
 - Vendors: `GET/POST/PUT/DELETE /vendors` — ✅
 - Projects: `GET/POST/PUT/DELETE /projects` — ✅
 - Auth: `Authorization: Bearer <JWT>` — ✅ **IMPLEMENTED & TESTED**
-- Docs: `GET /docs` (Swagger) — ⏳
+- Docs: `GET /docs` (Swagger) — ⏳ **NEXT: M3.5**
 - Metrics: `GET /metrics` — ⏳
 
 ## 6) Ops & DB
@@ -115,7 +115,7 @@ curl -H "Authorization: Bearer <your-jwt-token>" http://localhost:8080/items
 # Generate test JWT token
 ./jwtgen -user 1 -org 1 -roles "org_admin" -expiry 60
 
-# Run tests
+# Run tests (Authentication tests are complete)
 go test ./internal/auth/... -v
 go test ./internal/config/... -v
 
@@ -159,8 +159,19 @@ docker compose logs -f api
 - **Database & Migrations**: 100% ✅  
 - **API Endpoints**: 100% ✅
 - **Authentication & Authorization**: 100% ✅ **MILESTONE 3 COMPLETE**
-- **Documentation**: 0% ⏳
-- **Testing**: 75% 🚧 (Authentication tests complete)
+- **Documentation**: 0% ⏳ **NEXT: M3.5**
+- **Testing**: 75% 🚧 (Authentication tests complete, need general API tests)
 - **Operations & Monitoring**: 20% ⏳
 
-**Next major milestone**: M3.5 (OpenAPI documentation) - Authentication system is now production-ready with comprehensive testing and security features.
+## 11) Milestone 3 Completion Summary ✅
+
+**Milestone 3 (Authentication & Authorization) has been completed** with:
+
+- ✅ **Production-ready JWT authentication system**
+- ✅ **Comprehensive role-based access control**
+- ✅ **Multi-tenant data isolation**
+- ✅ **Enhanced security features and validation**
+- ✅ **Comprehensive error handling (75%+ test coverage)**
+- ✅ **Production configuration validation**
+
+**Next major milestone**: M3.5 (OpenAPI documentation) - The authentication system is now production-ready and provides a solid foundation for API documentation and client SDK generation.
