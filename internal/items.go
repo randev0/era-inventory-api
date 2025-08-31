@@ -9,6 +9,8 @@ import (
 
 	"era-inventory-api/internal/models"
 
+	"era-inventory-api/internal/auth"
+
 	"github.com/go-chi/chi/v5"
 )
 
@@ -19,42 +21,42 @@ func (s *Server) routes() {
 	r.Get("/health", func(w http.ResponseWriter, _ *http.Request) { w.Write([]byte("ok")) })
 	r.Get("/dbping", func(w http.ResponseWriter, _ *http.Request) { w.Write([]byte("db: ok")) })
 
-	// Apply RBAC middleware to all routes
-	r.Use(RBACMiddleware)
+	// Apply JWT auth middleware to all routes
+	r.Use(auth.AuthMiddleware(s.JWTManager))
 
-	// CRUD
+	// CRUD - require org_admin role for write operations
 	r.Get("/items", s.listItems)
 	r.Get("/items/{id}", s.getItem)
-	r.Post("/items", s.createItem)
-	r.Put("/items/{id}", s.updateItem)
-	r.Delete("/items/{id}", s.deleteItem)
+	r.Post("/items", auth.MustRole("org_admin", "project_admin")(http.HandlerFunc(s.createItem)).(http.HandlerFunc))
+	r.Put("/items/{id}", auth.MustRole("org_admin", "project_admin")(http.HandlerFunc(s.updateItem)).(http.HandlerFunc))
+	r.Delete("/items/{id}", auth.MustRole("org_admin")(http.HandlerFunc(s.deleteItem)).(http.HandlerFunc))
 
-	// Sites
+	// Sites - require org_admin role for write operations
 	r.Get("/sites", s.listSites)
 	r.Get("/sites/{id}", s.getSite)
-	r.Post("/sites", s.createSite)
-	r.Put("/sites/{id}", s.updateSite)
-	r.Delete("/sites/{id}", s.deleteSite)
+	r.Post("/sites", auth.MustRole("org_admin")(http.HandlerFunc(s.createSite)).(http.HandlerFunc))
+	r.Put("/sites/{id}", auth.MustRole("org_admin")(http.HandlerFunc(s.updateSite)).(http.HandlerFunc))
+	r.Delete("/sites/{id}", auth.MustRole("org_admin")(http.HandlerFunc(s.deleteSite)).(http.HandlerFunc))
 
-	// Vendors
+	// Vendors - require org_admin role for write operations
 	r.Get("/vendors", s.listVendors)
 	r.Get("/vendors/{id}", s.getVendor)
-	r.Post("/vendors", s.createVendor)
-	r.Put("/vendors/{id}", s.updateVendor)
-	r.Delete("/vendors/{id}", s.deleteVendor)
+	r.Post("/vendors", auth.MustRole("org_admin")(http.HandlerFunc(s.createVendor)).(http.HandlerFunc))
+	r.Put("/vendors/{id}", auth.MustRole("org_admin")(http.HandlerFunc(s.updateVendor)).(http.HandlerFunc))
+	r.Delete("/vendors/{id}", auth.MustRole("org_admin")(http.HandlerFunc(s.deleteVendor)).(http.HandlerFunc))
 
-	// Projects
+	// Projects - require org_admin role for write operations
 	r.Get("/projects", s.listProjects)
 	r.Get("/projects/{id}", s.getProject)
-	r.Post("/projects", s.createProject)
-	r.Put("/projects/{id}", s.updateProject)
-	r.Delete("/projects/{id}", s.deleteProject)
+	r.Post("/projects", auth.MustRole("org_admin")(http.HandlerFunc(s.createProject)).(http.HandlerFunc))
+	r.Put("/projects/{id}", auth.MustRole("org_admin")(http.HandlerFunc(s.updateProject)).(http.HandlerFunc))
+	r.Delete("/projects/{id}", auth.MustRole("org_admin")(http.HandlerFunc(s.deleteProject)).(http.HandlerFunc))
 }
 
 // LIST with basic filters & pagination
 func (s *Server) listItems(w http.ResponseWriter, r *http.Request) {
 	params := parseListParams(r)
-	orgID := OrgIDFromContext(r.Context())
+	orgID := auth.OrgIDFromContext(r.Context())
 
 	clauses := []string{}
 	args := []interface{}{}
@@ -120,7 +122,7 @@ func (s *Server) listItems(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) getItem(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	orgID := OrgIDFromContext(r.Context())
+	orgID := auth.OrgIDFromContext(r.Context())
 
 	var it models.Item
 	err := s.DB.QueryRow(`
@@ -153,7 +155,7 @@ func (s *Server) createItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	orgID := OrgIDFromContext(r.Context())
+	orgID := auth.OrgIDFromContext(r.Context())
 
 	err := s.DB.QueryRow(`
 		INSERT INTO inventory (asset_tag, name, manufacturer, model, device_type, site, installed_at, warranty_end, notes, org_id)
@@ -176,7 +178,7 @@ func (s *Server) createItem(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) updateItem(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	orgID := OrgIDFromContext(r.Context())
+	orgID := auth.OrgIDFromContext(r.Context())
 
 	var in models.Item
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
@@ -255,7 +257,7 @@ func (s *Server) updateItem(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) deleteItem(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	orgID := OrgIDFromContext(r.Context())
+	orgID := auth.OrgIDFromContext(r.Context())
 
 	res, err := s.DB.Exec(`DELETE FROM inventory WHERE id = $1 AND org_id = $2`, id, orgID)
 	if err != nil {

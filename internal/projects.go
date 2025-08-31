@@ -7,14 +7,16 @@ import (
 	"net/http"
 	"strings"
 
+	"era-inventory-api/internal/auth"
 	"era-inventory-api/internal/models"
 
 	"github.com/go-chi/chi/v5"
 )
 
+// LIST with basic filters & pagination
 func (s *Server) listProjects(w http.ResponseWriter, r *http.Request) {
 	params := parseListParams(r)
-	orgID := OrgIDFromContext(r.Context())
+	orgID := auth.OrgIDFromContext(r.Context())
 
 	clauses := []string{}
 	args := []interface{}{}
@@ -25,6 +27,7 @@ func (s *Server) listProjects(w http.ResponseWriter, r *http.Request) {
 	args = append(args, orgID)
 	arg++
 
+	// optional text search on name
 	if params.q != "" {
 		clauses = append(clauses, fmt.Sprintf("(code ILIKE $%d OR name ILIKE $%d)", arg, arg))
 		args = append(args, "%"+params.q+"%")
@@ -74,7 +77,7 @@ func (s *Server) listProjects(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) getProject(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	orgID := OrgIDFromContext(r.Context())
+	orgID := auth.OrgIDFromContext(r.Context())
 
 	var p models.Project
 	err := s.DB.QueryRow(`
@@ -103,7 +106,7 @@ func (s *Server) createProject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	orgID := OrgIDFromContext(r.Context())
+	orgID := auth.OrgIDFromContext(r.Context())
 
 	err := s.DB.QueryRow(`
 		INSERT INTO projects (code, name, description, org_id)
@@ -125,7 +128,7 @@ func (s *Server) createProject(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) updateProject(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	orgID := OrgIDFromContext(r.Context())
+	orgID := auth.OrgIDFromContext(r.Context())
 
 	var in models.Project
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
@@ -183,7 +186,7 @@ func (s *Server) updateProject(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) deleteProject(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	orgID := OrgIDFromContext(r.Context())
+	orgID := auth.OrgIDFromContext(r.Context())
 
 	res, err := s.DB.Exec(`DELETE FROM projects WHERE id = $1 AND org_id = $2`, id, orgID)
 	if err != nil {

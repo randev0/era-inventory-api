@@ -7,14 +7,16 @@ import (
 	"net/http"
 	"strings"
 
+	"era-inventory-api/internal/auth"
 	"era-inventory-api/internal/models"
 
 	"github.com/go-chi/chi/v5"
 )
 
+// LIST with basic filters & pagination
 func (s *Server) listSites(w http.ResponseWriter, r *http.Request) {
 	params := parseListParams(r)
-	orgID := OrgIDFromContext(r.Context())
+	orgID := auth.OrgIDFromContext(r.Context())
 
 	clauses := []string{}
 	args := []interface{}{}
@@ -25,6 +27,7 @@ func (s *Server) listSites(w http.ResponseWriter, r *http.Request) {
 	args = append(args, orgID)
 	arg++
 
+	// optional text search on name
 	if params.q != "" {
 		clauses = append(clauses, fmt.Sprintf("name ILIKE $%d", arg))
 		args = append(args, "%"+params.q+"%")
@@ -74,7 +77,7 @@ func (s *Server) listSites(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) getSite(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	orgID := OrgIDFromContext(r.Context())
+	orgID := auth.OrgIDFromContext(r.Context())
 
 	var sc models.Site
 	err := s.DB.QueryRow(`
@@ -103,7 +106,7 @@ func (s *Server) createSite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	orgID := OrgIDFromContext(r.Context())
+	orgID := auth.OrgIDFromContext(r.Context())
 
 	err := s.DB.QueryRow(`
 		INSERT INTO sites (name, location, notes, org_id)
@@ -121,7 +124,7 @@ func (s *Server) createSite(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) updateSite(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	orgID := OrgIDFromContext(r.Context())
+	orgID := auth.OrgIDFromContext(r.Context())
 
 	var in models.Site
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
@@ -175,7 +178,7 @@ func (s *Server) updateSite(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) deleteSite(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	orgID := OrgIDFromContext(r.Context())
+	orgID := auth.OrgIDFromContext(r.Context())
 
 	res, err := s.DB.Exec(`DELETE FROM sites WHERE id = $1 AND org_id = $2`, id, orgID)
 	if err != nil {
