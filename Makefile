@@ -23,8 +23,27 @@ build-windows: ## Build the Go binary for Windows
 	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -o bin/api.exe ./cmd/api
 
 .PHONY: test
-test: ## Run tests
-	go test -v ./...
+test: ## Run unit tests only
+	go test ./... -race -count=1 -timeout=60s
+
+.PHONY: test-int-up
+test-int-up: ## Spin up test DB
+	docker compose -f docker-compose.test.yml up -d --wait
+
+.PHONY: test-int-db
+test-int-db: ## Migrate + seed test DB
+	TEST_DATABASE_URL=$${TEST_DATABASE_URL:-postgres://era:era@localhost:5433/era_test?sslmode=disable} \
+	go run ./cmd/testmigrate && psql "$$TEST_DATABASE_URL" -f db/seeds/001_minimal.sql || true
+
+.PHONY: test-int
+test-int: ## Run only integration tests
+	$(MAKE) test-int-up
+	$(MAKE) test-int-db
+	INTEGRATION=1 go test ./... -race -count=1 -timeout=90s -tags=integration
+
+.PHONY: test-int-down
+test-int-down: ## Stop test DB
+	docker compose -f docker-compose.test.yml down -v
 
 .PHONY: test-coverage
 test-coverage: ## Run tests with coverage
@@ -44,6 +63,14 @@ docker-build: ## Build Docker image
 .PHONY: docker-run
 docker-run: ## Run Docker container locally
 	docker run -p 8080:8080 --env-file .env $(IMAGE_NAME):latest
+
+.PHONY: dev-up
+dev-up: ## Start dev stack
+	docker compose up -d
+
+.PHONY: dev-down
+dev-down: ## Stop dev stack
+	docker compose down -v
 
 .PHONY: docker-compose-up
 docker-compose-up: ## Start all services with Docker Compose
@@ -101,8 +128,35 @@ security-scan: ## Run security scan on Docker image
 		-v $(PWD):/workspace \
 		aquasec/trivy image $(IMAGE_NAME):$(VERSION)
 
-.PHONY: all
-all: clean test build docker-build ## Run all: clean, test, build, and docker-build
+.PHONY: all up migrate seed test openapi-validate logs psql docs metrics
 
-.PHONY: release
-release: clean test docker-build docker-push ## Full release process
+all: migrate seed openapi-validate test
+	@echo "__BUILD_OK__"
+
+up:
+	docker compose up -d db api
+
+migrate:
+	docker compose up migrate
+
+seed:
+	- docker compose up seed
+
+test:
+	go test ./... -v
+
+openapi-validate:
+	- docker run --rm -v ${PWD}:/spec openapitools/openapi-generator-cli validate -i /spec/internal/openapi/openapi.yaml
+
+.PHONY: openapi
+openapi: ## Generate OpenAPI docs
+	@echo "OpenAPI spec is already generated and served at /openapi.yaml and /docs"
+
+logs:
+	docker compose logs -f api
+
+psql:
+	docker compose exec db psql -U postgres -d era
+
+docs:
+	@echo "Open http://localhost:8080/docs"

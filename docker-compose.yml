@@ -23,6 +23,7 @@ services:
     restart: unless-stopped
     environment:
       DB_DSN: postgres://postgres:postgres@db:5432/era?sslmode=disable
+      RLS_ENABLED: "true"   # set to "false" to disable
     depends_on:
       db:
         condition: service_healthy
@@ -44,6 +45,21 @@ services:
     volumes:
       - ./:/workspace:ro
     command: ["sh", "db/migrate.sh"]
+
+  seed:
+    image: postgres:16-alpine
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGHOST: db
+      PGPORT: "5432"
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: era
+    volumes:
+      - ./db/seed.sql:/seed.sql:ro
+    command: ["sh", "-c", "psql -v ON_ERROR_STOP=1 -f /seed.sql && echo 'Seed OK'"]
 
 
 volumes:

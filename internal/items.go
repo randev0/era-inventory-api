@@ -14,45 +14,6 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-func (s *Server) routes() {
-	r := s.Router
-
-	// health
-	r.Get("/health", func(w http.ResponseWriter, _ *http.Request) { w.Write([]byte("ok")) })
-	r.Get("/dbping", func(w http.ResponseWriter, _ *http.Request) { w.Write([]byte("db: ok")) })
-
-	// Apply JWT auth middleware to all routes
-	r.Use(auth.AuthMiddleware(s.JWTManager))
-
-	// CRUD - require org_admin role for write operations
-	r.Get("/items", s.listItems)
-	r.Get("/items/{id}", s.getItem)
-	r.Post("/items", auth.MustRole("org_admin", "project_admin")(http.HandlerFunc(s.createItem)).(http.HandlerFunc))
-	r.Put("/items/{id}", auth.MustRole("org_admin", "project_admin")(http.HandlerFunc(s.updateItem)).(http.HandlerFunc))
-	r.Delete("/items/{id}", auth.MustRole("org_admin")(http.HandlerFunc(s.deleteItem)).(http.HandlerFunc))
-
-	// Sites - require org_admin role for write operations
-	r.Get("/sites", s.listSites)
-	r.Get("/sites/{id}", s.getSite)
-	r.Post("/sites", auth.MustRole("org_admin")(http.HandlerFunc(s.createSite)).(http.HandlerFunc))
-	r.Put("/sites/{id}", auth.MustRole("org_admin")(http.HandlerFunc(s.updateSite)).(http.HandlerFunc))
-	r.Delete("/sites/{id}", auth.MustRole("org_admin")(http.HandlerFunc(s.deleteSite)).(http.HandlerFunc))
-
-	// Vendors - require org_admin role for write operations
-	r.Get("/vendors", s.listVendors)
-	r.Get("/vendors/{id}", s.getVendor)
-	r.Post("/vendors", auth.MustRole("org_admin")(http.HandlerFunc(s.createVendor)).(http.HandlerFunc))
-	r.Put("/vendors/{id}", auth.MustRole("org_admin")(http.HandlerFunc(s.updateVendor)).(http.HandlerFunc))
-	r.Delete("/vendors/{id}", auth.MustRole("org_admin")(http.HandlerFunc(s.deleteVendor)).(http.HandlerFunc))
-
-	// Projects - require org_admin role for write operations
-	r.Get("/projects", s.listProjects)
-	r.Get("/projects/{id}", s.getProject)
-	r.Post("/projects", auth.MustRole("org_admin")(http.HandlerFunc(s.createProject)).(http.HandlerFunc))
-	r.Put("/projects/{id}", auth.MustRole("org_admin")(http.HandlerFunc(s.updateProject)).(http.HandlerFunc))
-	r.Delete("/projects/{id}", auth.MustRole("org_admin")(http.HandlerFunc(s.deleteProject)).(http.HandlerFunc))
-}
-
 // LIST with basic filters & pagination
 func (s *Server) listItems(w http.ResponseWriter, r *http.Request) {
 	params := parseListParams(r)
@@ -95,7 +56,8 @@ func (s *Server) listItems(w http.ResponseWriter, r *http.Request) {
 	sqlStr += buildOrderBy(params.sort, allowedSort)
 	sqlStr += fmt.Sprintf(" LIMIT %d OFFSET %d", params.limit, params.offset)
 
-	rows, err := s.DB.Query(sqlStr, args...)
+	q := dbFrom(r.Context(), s.DB)
+	rows, err := q.QueryContext(r.Context(), sqlStr, args...)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
@@ -125,7 +87,8 @@ func (s *Server) getItem(w http.ResponseWriter, r *http.Request) {
 	orgID := auth.OrgIDFromContext(r.Context())
 
 	var it models.Item
-	err := s.DB.QueryRow(`
+	q := dbFrom(r.Context(), s.DB)
+	err := q.QueryRowContext(r.Context(), `
 		SELECT id, asset_tag, name, manufacturer, model, device_type, site,
 		       installed_at, warranty_end, notes, created_at, updated_at
 		FROM inventory WHERE id = $1 AND org_id = $2`, id, orgID).Scan(
@@ -157,7 +120,8 @@ func (s *Server) createItem(w http.ResponseWriter, r *http.Request) {
 
 	orgID := auth.OrgIDFromContext(r.Context())
 
-	err := s.DB.QueryRow(`
+	q := dbFrom(r.Context(), s.DB)
+	err := q.QueryRowContext(r.Context(), `
 		INSERT INTO inventory (asset_tag, name, manufacturer, model, device_type, site, installed_at, warranty_end, notes, org_id)
 		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
 		RETURNING id, created_at, updated_at
@@ -235,8 +199,9 @@ func (s *Server) updateItem(w http.ResponseWriter, r *http.Request) {
 	sqlStr += fmt.Sprintf(" WHERE id = $%d AND org_id = $%d RETURNING id, asset_tag, name, manufacturer, model, device_type, site, installed_at, warranty_end, notes, created_at, updated_at", len(args)+1, len(args)+2)
 	args = append(args, id, orgID)
 
+	q := dbFrom(r.Context(), s.DB)
 	var out models.Item
-	if err := s.DB.QueryRow(sqlStr, args...).Scan(
+	if err := q.QueryRowContext(r.Context(), sqlStr, args...).Scan(
 		&out.ID, &out.AssetTag, &out.Name, &out.Manufacturer, &out.Model, &out.DeviceType,
 		&out.Site, &out.InstalledAt, &out.WarrantyEnd, &out.Notes, &out.CreatedAt, &out.UpdatedAt,
 	); err != nil {
@@ -259,7 +224,8 @@ func (s *Server) deleteItem(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	orgID := auth.OrgIDFromContext(r.Context())
 
-	res, err := s.DB.Exec(`DELETE FROM inventory WHERE id = $1 AND org_id = $2`, id, orgID)
+	q := dbFrom(r.Context(), s.DB)
+	res, err := q.ExecContext(r.Context(), `DELETE FROM inventory WHERE id = $1 AND org_id = $2`, id, orgID)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return

@@ -23,7 +23,7 @@ _Last updated: December 2024_
   - `items`, `sites`, `vendors`, `projects`
 - [x] List ergonomics:
   - pagination (`limit/offset`), search (`q`), sorting (`sort`)
-  - response envelope: `{ data, page { limit, offset, total } }`
+  - response envelope: `{ data, page { limit, offset, total } }` 
 - [x] RBAC scaffold: org ID injected via middleware/context
 - [x] **JWT Authentication System**: ✅ **COMPLETED**
   - HS256 signing with proper claims structure

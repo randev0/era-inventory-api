@@ -1,0 +1,25 @@
+goroutine 19 [running]:
+runtime/pprof.writeGoroutineStacks({0xbe4380, 0xc000088128})
+	C:/Program Files/Go/src/runtime/pprof/pprof.go:761 +0x6a
+runtime/pprof.writeGoroutine({0xbe4380?, 0xc000088128?}, 0xd0?)
+	C:/Program Files/Go/src/runtime/pprof/pprof.go:750 +0x25
+runtime/pprof.(*Profile).WriteTo(0xafd027?, {0xbe4380?, 0xc000088128?}, 0x1b6?)
+	C:/Program Files/Go/src/runtime/pprof/pprof.go:374 +0x14b
+era-inventory-api/internal/tests.TestMain.func1()
+	D:/Documents/Webdev/era-inventory-api/internal/tests/integration_test.go:33 +0xbb
+created by era-inventory-api/internal/tests.TestMain in goroutine 1
+	D:/Documents/Webdev/era-inventory-api/internal/tests/integration_test.go:29 +0x7f
+
+goroutine 1 [sleep]:
+time.Sleep(0x3b9aca00)
+	C:/Program Files/Go/src/runtime/time.go:315 +0xf7
+era-inventory-api/internal/tests.TestMain(0xc000230000)
+	D:/Documents/Webdev/era-inventory-api/internal/tests/integration_test.go:62 +0x1bc
+main.main()
+	_testmain.go:57 +0xa8
+
+goroutine 20 [select]:
+database/sql.(*DB).connectionOpener(0xc000200680, {0xbeb928, 0xc000224050})
+	C:/Program Files/Go/src/database/sql/sql.go:1253 +0x87
+created by database/sql.OpenDB in goroutine 1
+	C:/Program Files/Go/src/database/sql/sql.go:833 +0x130

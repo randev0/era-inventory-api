@@ -75,15 +75,85 @@ curl -H "Authorization: Bearer <your-jwt-token>" http://localhost:8080/items
 ```
 ├── cmd/
 │   ├── api/          # Main API server
-│   └── tools/        # JWT generator tool
+│   ├── tools/        # JWT generator tool
+│   └── testmigrate/  # Test database migration runner
 ├── internal/
 │   ├── auth/         # JWT authentication & middleware
 │   ├── config/       # Configuration management
 │   ├── models/       # Data models
+│   ├── testutil/     # Test utilities
 │   └── ...           # Business logic
-├── db/               # Database migrations
+├── db/
+│   ├── migrations/   # Database migrations
+│   └── seeds/        # Test data seeds
+├── .github/workflows/ # CI/CD workflows
 └── docker-compose.yml
 ```
+
+## 🚀 Quickstart
+
+### Development Setup
+```bash
+# Start the development stack
+make dev-up
+
+# Set environment variables
+cp env.example .env
+# Edit .env with your database credentials
+
+# Run the API
+DATABASE_URL=postgres://postgres:postgres@localhost:5432/era?sslmode=disable go run ./cmd/api
+```
+
+### Testing
+```bash
+# Run unit tests only
+make test
+
+# Run integration tests (requires Docker)
+make test-int
+
+# Clean up test database
+make test-int-down
+```
+
+## 🔧 Development Tools
+
+### Makefile Targets
+```bash
+make help          # Show all available targets
+make dev-up        # Start development stack
+make dev-down      # Stop development stack
+make test          # Run unit tests
+make test-int      # Run integration tests
+make test-int-up   # Start test database
+make test-int-down # Stop test database
+make openapi       # Generate OpenAPI docs
+make build         # Build binary
+make clean         # Clean build artifacts
+```
+
+## 📊 Observability
+
+### Metrics Endpoint
+- **Endpoint**: `GET /metrics`
+- **Format**: Prometheus metrics
+- **Control**: Set `ENABLE_METRICS=true` to enable
+
+### OpenAPI Documentation
+- **Spec**: `GET /openapi.yaml`
+- **UI**: `GET /docs` (Swagger UI)
+- **Control**: Set `ENABLE_SWAGGER=true` to enable
+
+## 🚀 CI/CD
+
+The project includes GitHub Actions workflows that:
+- Run unit tests on every push/PR
+- Run integration tests on main branch
+- Include security scanning with Trivy
+- Upload test coverage reports
+
+**Local testing**: Use `make test-int` to run the same integration tests locally.
 
 ## 🧩 Migrations
 

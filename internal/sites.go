@@ -54,7 +54,8 @@ func (s *Server) listSites(w http.ResponseWriter, r *http.Request) {
 	sqlStr += buildOrderBy(params.sort, allowedSort)
 	sqlStr += fmt.Sprintf(" LIMIT %d OFFSET %d", params.limit, params.offset)
 
-	rows, err := s.DB.Query(sqlStr, args...)
+	q := dbFrom(r.Context(), s.DB)
+	rows, err := q.QueryContext(r.Context(), sqlStr, args...)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
@@ -80,7 +81,8 @@ func (s *Server) getSite(w http.ResponseWriter, r *http.Request) {
 	orgID := auth.OrgIDFromContext(r.Context())
 
 	var sc models.Site
-	err := s.DB.QueryRow(`
+	q := dbFrom(r.Context(), s.DB)
+	err := q.QueryRowContext(r.Context(), `
 		SELECT id, name, location, notes, created_at, updated_at
 		FROM sites WHERE id = $1 AND org_id = $2`, id, orgID).Scan(&sc.ID, &sc.Name, &sc.Location, &sc.Notes, &sc.CreatedAt, &sc.UpdatedAt)
 	if err == sql.ErrNoRows {
@@ -108,7 +110,8 @@ func (s *Server) createSite(w http.ResponseWriter, r *http.Request) {
 
 	orgID := auth.OrgIDFromContext(r.Context())
 
-	err := s.DB.QueryRow(`
+	q := dbFrom(r.Context(), s.DB)
+	err := q.QueryRowContext(r.Context(), `
 		INSERT INTO sites (name, location, notes, org_id)
 		VALUES ($1,$2,$3,$4)
 		RETURNING id, name, location, notes, created_at, updated_at
@@ -163,8 +166,9 @@ func (s *Server) updateSite(w http.ResponseWriter, r *http.Request) {
 	sqlStr += fmt.Sprintf(" WHERE id = $%d AND org_id = $%d RETURNING id, name, location, notes, created_at, updated_at", len(args)+1, len(args)+2)
 	args = append(args, id, orgID)
 
+	q := dbFrom(r.Context(), s.DB)
 	var out models.Site
-	if err := s.DB.QueryRow(sqlStr, args...).Scan(&out.ID, &out.Name, &out.Location, &out.Notes, &out.CreatedAt, &out.UpdatedAt); err != nil {
+	if err := q.QueryRowContext(r.Context(), sqlStr, args...).Scan(&out.ID, &out.Name, &out.Location, &out.Notes, &out.CreatedAt, &out.UpdatedAt); err != nil {
 		if err == sql.ErrNoRows {
 			http.Error(w, "not found", http.StatusNotFound)
 			return
@@ -180,7 +184,8 @@ func (s *Server) deleteSite(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	orgID := auth.OrgIDFromContext(r.Context())
 
-	res, err := s.DB.Exec(`DELETE FROM sites WHERE id = $1 AND org_id = $2`, id, orgID)
+	q := dbFrom(r.Context(), s.DB)
+	res, err := q.ExecContext(r.Context(), `DELETE FROM sites WHERE id = $1 AND org_id = $2`, id, orgID)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
