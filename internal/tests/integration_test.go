@@ -4,7 +4,6 @@ package tests
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -19,19 +18,12 @@ import (
 )
 
 var testServer *internal.Server
-var testDB *sql.DB
 
 func TestMain(m *testing.M) {
 	// Skip if not running integration tests
 	if os.Getenv("INTEGRATION") != "1" {
 		os.Exit(0)
 	}
-
-	// Setup test database
-	testDB = testutil.NewTestDB(&testing.T{})
-	
-	// Reset schema for clean state
-	testutil.ResetSchema(&testing.T{}, testDB)
 
 	// Create test config
 	cfg := &config.Config{
@@ -41,7 +33,7 @@ func TestMain(m *testing.M) {
 		JWTExpiry:   24 * time.Hour,
 	}
 
-	// Create test server
+	// Create test server with explicit database URL
 	dsn := os.Getenv("TEST_DATABASE_URL")
 	if dsn == "" {
 		dsn = "postgres://era:era@localhost:5432/era_test?sslmode=disable"
@@ -55,9 +47,6 @@ func TestMain(m *testing.M) {
 	// Cleanup
 	if testServer != nil {
 		testServer.Close(context.Background())
-	}
-	if testDB != nil {
-		testDB.Close()
 	}
 
 	os.Exit(code)
