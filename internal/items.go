@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strconv"
 	"strings"
 
 	"era-inventory-api/internal/models"
@@ -51,35 +50,21 @@ func (s *Server) routes() {
 
 // LIST with basic filters & pagination
 func (s *Server) listItems(w http.ResponseWriter, r *http.Request) {
-	q := r.URL.Query().Get("q")
-	deviceType := r.URL.Query().Get("type")
-	site := r.URL.Query().Get("site")
-
-	page, limit := 1, 20
-	if p, _ := strconv.Atoi(r.URL.Query().Get("page")); p > 0 {
-		page = p
-	}
-	if l, _ := strconv.Atoi(r.URL.Query().Get("limit")); l > 0 && l <= 100 {
-		limit = l
-	}
-	offset := (page - 1) * limit
+	params := parseListParams(r)
 
 	clauses := []string{}
 	args := []interface{}{}
 	arg := 1
-	if q != "" {
-		clauses = append(clauses, fmt.Sprintf("(name ILIKE $%d OR model ILIKE $%d)", arg, arg))
-		args = append(args, "%"+q+"%")
-		arg++
-	}
-	if deviceType != "" {
-		clauses = append(clauses, fmt.Sprintf("device_type = $%d", arg))
-		args = append(args, deviceType)
-		arg++
-	}
-	if site != "" {
-		clauses = append(clauses, fmt.Sprintf("site = $%d", arg))
-		args = append(args, site)
+
+	// org filter
+	clauses = append(clauses, fmt.Sprintf("org_id = $%d", arg))
+	args = append(args, params.orgID)
+	arg++
+
+	// optional text search on name/code/sku/serial → map to name or asset_tag
+	if params.q != "" {
+		clauses = append(clauses, fmt.Sprintf("(name ILIKE $%d OR asset_tag ILIKE $%d)", arg, arg))
+		args = append(args, "%"+params.q+"%")
 		arg++
 	}
 
@@ -90,7 +75,15 @@ func (s *Server) listItems(w http.ResponseWriter, r *http.Request) {
 	if len(clauses) > 0 {
 		sqlStr += " WHERE " + strings.Join(clauses, " AND ")
 	}
-	sqlStr += fmt.Sprintf(" ORDER BY id LIMIT %d OFFSET %d", limit, offset)
+
+	allowedSort := map[string]string{
+		"id":         "id",
+		"name":       "name",
+		"created_at": "created_at",
+		"updated_at": "updated_at",
+	}
+	sqlStr += buildOrderBy(params.sort, allowedSort)
+	sqlStr += fmt.Sprintf(" LIMIT %d OFFSET %d", params.limit, params.offset)
 
 	rows, err := s.DB.Query(sqlStr, args...)
 	if err != nil {
@@ -113,7 +106,7 @@ func (s *Server) listItems(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{"page": page, "limit": limit, "count": len(items), "data": items})
+	json.NewEncoder(w).Encode(items)
 }
 
 func (s *Server) getItem(w http.ResponseWriter, r *http.Request) {

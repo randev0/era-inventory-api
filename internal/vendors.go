@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strconv"
 	"strings"
 
 	"era-inventory-api/internal/models"
@@ -14,22 +13,20 @@ import (
 )
 
 func (s *Server) listVendors(w http.ResponseWriter, r *http.Request) {
-	q := r.URL.Query().Get("q")
-	page, limit := 1, 20
-	if p, _ := strconv.Atoi(r.URL.Query().Get("page")); p > 0 {
-		page = p
-	}
-	if l, _ := strconv.Atoi(r.URL.Query().Get("limit")); l > 0 && l <= 100 {
-		limit = l
-	}
-	offset := (page - 1) * limit
+	params := parseListParams(r)
 
 	clauses := []string{}
 	args := []interface{}{}
 	arg := 1
-	if q != "" {
+
+	// org filter
+	clauses = append(clauses, fmt.Sprintf("org_id = $%d", arg))
+	args = append(args, params.orgID)
+	arg++
+
+	if params.q != "" {
 		clauses = append(clauses, fmt.Sprintf("name ILIKE $%d", arg))
-		args = append(args, "%"+q+"%")
+		args = append(args, "%"+params.q+"%")
 		arg++
 	}
 
@@ -39,7 +36,15 @@ func (s *Server) listVendors(w http.ResponseWriter, r *http.Request) {
 	if len(clauses) > 0 {
 		sqlStr += " WHERE " + strings.Join(clauses, " AND ")
 	}
-	sqlStr += fmt.Sprintf(" ORDER BY id LIMIT %d OFFSET %d", limit, offset)
+
+	allowedSort := map[string]string{
+		"id":         "id",
+		"name":       "name",
+		"created_at": "created_at",
+		"updated_at": "updated_at",
+	}
+	sqlStr += buildOrderBy(params.sort, allowedSort)
+	sqlStr += fmt.Sprintf(" LIMIT %d OFFSET %d", params.limit, params.offset)
 
 	rows, err := s.DB.Query(sqlStr, args...)
 	if err != nil {
@@ -59,7 +64,7 @@ func (s *Server) listVendors(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{"page": page, "limit": limit, "count": len(vendors), "data": vendors})
+	json.NewEncoder(w).Encode(vendors)
 }
 
 func (s *Server) getVendor(w http.ResponseWriter, r *http.Request) {
