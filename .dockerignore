@@ -1,0 +1,57 @@
+# Git
+.git
+.gitignore
+
+# Documentation
+README.md
+LICENSE
+PROGRESS.md
+RESPONSE_ENVELOPE.md
+
+# Build artifacts
+bin/
+*.exe
+api.exe
+jwtgen.exe
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Test files
+coverage.out
+coverage.html
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# CI/CD
+.github/
+
+# Database
+db/migrations/
+db/seed.sql
+db/migrate.sh
+
+# Request examples
+request/
+
+# Temporary files
+*.tmp
+*.temp
