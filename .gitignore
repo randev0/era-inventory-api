@@ -38,6 +38,10 @@ pgdata/
 # But keep migration files in git
 !db/migrations/*.sql
 
+# Keep seed files in git
+!db/seeds/*.sql
+!db/seed.sql
+
 # Cursor AI
 .cursor/
 
