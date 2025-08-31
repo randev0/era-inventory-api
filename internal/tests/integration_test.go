@@ -118,13 +118,11 @@ func TestValidToken(t *testing.T) {
 		24*time.Hour,
 	)
 
-	claims := map[string]interface{}{
-		"sub": "test@example.com",
-		"org_id": 1,
-		"roles": []string{"org_admin"},
-	}
+	userID := int64(1)
+	orgID := int64(1)
+	roles := []string{"org_admin"}
 
-	token, err := jwtManager.GenerateToken(claims)
+	token, err := jwtManager.GenerateToken(userID, orgID, roles)
 	if err != nil {
 		t.Fatalf("Failed to generate test token: %v", err)
 	}
@@ -151,13 +149,11 @@ func TestCreateItem(t *testing.T) {
 		24*time.Hour,
 	)
 
-	claims := map[string]interface{}{
-		"sub": "test@example.com",
-		"org_id": 1,
-		"roles": []string{"org_admin"},
-	}
+	userID := int64(1)
+	orgID := int64(1)
+	roles := []string{"org_admin"}
 
-	token, err := jwtManager.GenerateToken(claims)
+	token, err := jwtManager.GenerateToken(userID, orgID, roles)
 	if err != nil {
 		t.Fatalf("Failed to generate test token: %v", err)
 	}
@@ -187,13 +183,11 @@ func TestInsufficientPermissions(t *testing.T) {
 		24*time.Hour,
 	)
 
-	claims := map[string]interface{}{
-		"sub": "test@example.com",
-		"org_id": 1,
-		"roles": []string{"viewer"}, // Only viewer role
-	}
+	userID := int64(1)
+	orgID := int64(1)
+	roles := []string{"viewer"} // Only viewer role
 
-	token, err := jwtManager.GenerateToken(claims)
+	token, err := jwtManager.GenerateToken(userID, orgID, roles)
 	if err != nil {
 		t.Fatalf("Failed to generate test token: %v", err)
 	}
