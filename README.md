@@ -3,6 +3,9 @@
 A simple **Go + Postgres REST API** for managing an inventory system.  
 Built with [Go Chi](https://github.com/go-chi/chi) for routing, [pgx](https://github.com/jackc/pgx) for PostgreSQL, and fully containerized with Docker.
 
+## Project Status
+See **[PROGRESS.md](./PROGRESS.md)** for the live milestone checklist and next steps.
+
 ---
 
 ## 🚀 Features
