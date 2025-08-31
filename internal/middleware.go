@@ -6,10 +6,18 @@ import (
 	"strconv"
 )
 
+// contextKey is a custom type for context keys to avoid collisions
+type contextKey string
+
+const (
+	// OrgIDKey is the context key for organization ID
+	OrgIDKey contextKey = "orgID"
+)
+
 // OrgIDFromContext extracts the organization ID from the request context.
 // Returns 1 as default if not found or invalid.
 func OrgIDFromContext(ctx context.Context) int64 {
-	if v := ctx.Value("orgID"); v != nil {
+	if v := ctx.Value(OrgIDKey); v != nil {
 		if id, ok := v.(int64); ok {
 			return id
 		}
@@ -35,8 +43,8 @@ func RBACMiddleware(next http.Handler) http.Handler {
 			orgID = 1
 		}
 
-		// Store orgID in request context
-		ctx := context.WithValue(r.Context(), "orgID", orgID)
+		// Store orgID in request context using custom key type
+		ctx := context.WithValue(r.Context(), OrgIDKey, orgID)
 
 		// TODO: Add JWT validation and role checking here
 		// For now, just pass the request with orgID in context
