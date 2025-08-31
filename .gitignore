@@ -40,3 +40,9 @@ pgdata/
 
 # Cursor AI
 .cursor/
+
+# Go build outputs
+api
+api.exe
+jwtgen
+jwtgen.exe
