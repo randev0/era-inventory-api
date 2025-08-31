@@ -44,7 +44,7 @@ func TestMain(m *testing.M) {
 	// Create test server
 	dsn := os.Getenv("TEST_DATABASE_URL")
 	if dsn == "" {
-		dsn = "postgres://era:era@localhost:5433/era_test?sslmode=disable"
+		dsn = "postgres://era:era@localhost:5432/era_test?sslmode=disable"
 	}
 	
 	testServer = internal.NewServer(dsn, cfg)

@@ -15,7 +15,7 @@ import (
 func main() {
 	dsn := os.Getenv("TEST_DATABASE_URL")
 	if dsn == "" {
-		dsn = "postgres://era:era@localhost:5433/era_test?sslmode=disable"
+		dsn = "postgres://era:era@localhost:5432/era_test?sslmode=disable"
 	}
 
 	db, err := sql.Open("pgx", dsn)
