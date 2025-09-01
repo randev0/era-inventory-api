@@ -66,6 +66,9 @@ func NewServer(dsn string, cfg *config.Config) *Server {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 	})
+
+	// Public auth routes (no JWT required)
+	s.Router.Post("/auth/login", s.loginUser)
 	s.mountDocs(s.Router)
 
 	// Mount metrics if enabled
@@ -213,4 +216,24 @@ func (s *Server) mountProtectedRoutes(r chi.Router) {
 	r.Post("/projects", auth.MustRole("org_admin")(http.HandlerFunc(s.createProject)).(http.HandlerFunc))
 	r.Put("/projects/{id}", auth.MustRole("org_admin")(http.HandlerFunc(s.updateProject)).(http.HandlerFunc))
 	r.Delete("/projects/{id}", auth.MustRole("org_admin")(http.HandlerFunc(s.deleteProject)).(http.HandlerFunc))
+
+	// User management - org_admin only, with multi-tenant logic
+	r.Post("/users", auth.MustRole("org_admin")(http.HandlerFunc(s.createUser)).(http.HandlerFunc))
+	r.Get("/users", auth.MustRole("org_admin")(http.HandlerFunc(s.listUsers)).(http.HandlerFunc))
+	r.Get("/users/{id}", auth.MustRole("org_admin")(http.HandlerFunc(s.getUser)).(http.HandlerFunc))
+	r.Put("/users/{id}", auth.MustRole("org_admin")(http.HandlerFunc(s.updateUser)).(http.HandlerFunc))
+	r.Delete("/users/{id}", auth.MustRole("org_admin")(http.HandlerFunc(s.deleteUser)).(http.HandlerFunc))
+
+	// Organization management - main tenant only
+	r.Get("/organizations", auth.MustRole("org_admin")(http.HandlerFunc(s.listOrganizations)).(http.HandlerFunc))
+	r.Get("/organizations/{id}", auth.MustRole("org_admin")(http.HandlerFunc(s.getOrganization)).(http.HandlerFunc))
+	r.Get("/organizations/{id}/stats", auth.MustRole("org_admin")(http.HandlerFunc(s.getOrganizationStats)).(http.HandlerFunc))
+	r.Post("/organizations", auth.MustRole("org_admin")(http.HandlerFunc(s.createOrganization)).(http.HandlerFunc))
+	r.Put("/organizations/{id}", auth.MustRole("org_admin")(http.HandlerFunc(s.updateOrganization)).(http.HandlerFunc))
+	r.Delete("/organizations/{id}", auth.MustRole("org_admin")(http.HandlerFunc(s.deleteOrganization)).(http.HandlerFunc))
+
+	// Self-service routes
+	r.Get("/auth/profile", s.getUserProfile)
+	r.Put("/auth/profile", s.updateUserProfile)
+	r.Put("/auth/change-password", s.changePassword)
 }

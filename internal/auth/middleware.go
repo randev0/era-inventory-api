@@ -31,10 +31,10 @@ type ErrorResponse struct {
 
 // TokenExpirationWarning represents a token expiration warning
 type TokenExpirationWarning struct {
-	Warning     string    `json:"warning"`
-	ExpiresAt   time.Time `json:"expires_at"`
-	ExpiresIn   string    `json:"expires_in"`
-	Code        string    `json:"code"`
+	Warning   string    `json:"warning"`
+	ExpiresAt time.Time `json:"expires_at"`
+	ExpiresIn string    `json:"expires_in"`
+	Code      string    `json:"code"`
 }
 
 // ClaimsFromContext extracts the JWT claims from the request context
@@ -77,8 +77,9 @@ func RolesFromContext(ctx context.Context) []string {
 
 // Public paths that don't require authentication
 var publicPaths = map[string]bool{
-	"/health": true,
-	"/dbping": true,
+	"/health":     true,
+	"/dbping":     true,
+	"/auth/login": true,
 }
 
 // isPublicPath checks if the given path is public (no auth required)
@@ -166,7 +167,7 @@ func AuthMiddleware(jwtManager *JWTManager) func(http.Handler) http.Handler {
 				// Determine specific error type
 				var errorCode string
 				var errorMessage string
-				
+
 				if strings.Contains(err.Error(), "expired") {
 					errorCode = "TOKEN_EXPIRED"
 					errorMessage = "Token has expired"
@@ -180,7 +181,7 @@ func AuthMiddleware(jwtManager *JWTManager) func(http.Handler) http.Handler {
 					errorCode = "INVALID_TOKEN"
 					errorMessage = "Invalid or expired token"
 				}
-				
+
 				sendErrorResponse(w, errorMessage, errorCode, http.StatusUnauthorized)
 				return
 			}
@@ -244,6 +245,56 @@ func MustRole(requiredRoles ...string) func(http.Handler) http.Handler {
 				return
 			}
 
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// Multi-tenant helper functions
+
+// IsMainTenant checks if current user is from main tenant (org_id = 1)
+func IsMainTenant(ctx context.Context) bool {
+	orgID := OrgIDFromContext(ctx)
+	return orgID == 1
+}
+
+// CanManageOrg checks if current user can manage the specified organization
+func CanManageOrg(ctx context.Context, targetOrgID int64) bool {
+	currentOrgID := OrgIDFromContext(ctx)
+	// Main tenant can manage any org, others only their own
+	return currentOrgID == 1 || currentOrgID == targetOrgID
+}
+
+// GetTargetOrgID determines which org to create user in
+func GetTargetOrgID(ctx context.Context, requestedOrgID *int64) int64 {
+	currentOrgID := OrgIDFromContext(ctx)
+
+	if currentOrgID == 1 && requestedOrgID != nil {
+		// Main tenant can specify any org
+		return *requestedOrgID
+	}
+
+	// Client tenants create users in their own org
+	return currentOrgID
+}
+
+// HasRequiredRole checks if the user has any of the required roles
+func HasRequiredRole(ctx context.Context, requiredRoles ...string) bool {
+	claims := ClaimsFromContext(ctx)
+	if claims == nil {
+		return false
+	}
+	return claims.HasRole(requiredRoles...)
+}
+
+// RequireMainTenant middleware that requires main tenant access
+func RequireMainTenant() func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if !IsMainTenant(r.Context()) {
+				sendErrorResponse(w, "Access denied - main tenant required", "MAIN_TENANT_REQUIRED", http.StatusForbidden)
+				return
+			}
 			next.ServeHTTP(w, r)
 		})
 	}
