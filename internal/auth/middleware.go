@@ -13,6 +13,8 @@ import (
 type contextKey string
 
 const (
+	// ClaimsKey is the context key for JWT claims
+	ClaimsKey contextKey = "claims"
 	// UserIDKey is the context key for user ID
 	UserIDKey contextKey = "userID"
 	// OrgIDKey is the context key for organization ID
@@ -37,7 +39,7 @@ type TokenExpirationWarning struct {
 
 // ClaimsFromContext extracts the JWT claims from the request context
 func ClaimsFromContext(ctx context.Context) *Claims {
-	if claims, ok := ctx.Value("claims").(*Claims); ok {
+	if claims, ok := ctx.Value(ClaimsKey).(*Claims); ok {
 		return claims
 	}
 	return nil
@@ -92,7 +94,9 @@ func sendErrorResponse(w http.ResponseWriter, message, code string, statusCode i
 		Error: message,
 		Code:  code,
 	}
-	json.NewEncoder(w).Encode(response)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
 }
 
 // sendTokenExpirationWarning adds a warning header when token expires soon
@@ -196,7 +200,7 @@ func AuthMiddleware(jwtManager *JWTManager) func(http.Handler) http.Handler {
 			}
 
 			// Set user context
-			ctx := context.WithValue(r.Context(), "claims", claims)
+			ctx := context.WithValue(r.Context(), ClaimsKey, claims)
 			ctx = context.WithValue(ctx, UserIDKey, claims.UserID)
 			ctx = context.WithValue(ctx, OrgIDKey, claims.OrgID)
 			ctx = context.WithValue(ctx, RolesKey, claims.Roles)

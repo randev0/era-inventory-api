@@ -27,7 +27,9 @@ func TestMetricsEndpoint(t *testing.T) {
 	// Add a test endpoint
 	router.Get("/ping", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("pong"))
+		if _, err := w.Write([]byte("pong")); err != nil {
+			t.Errorf("Failed to write response: %v", err)
+		}
 	})
 
 	// Mount metrics endpoint
@@ -114,7 +116,9 @@ func TestMetricsMiddleware(t *testing.T) {
 	// Create a test handler
 	router.Get("/test", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("test response"))
+		if _, err := w.Write([]byte("test response")); err != nil {
+			t.Errorf("Failed to write response: %v", err)
+		}
 	})
 
 	// Test the middleware
@@ -146,7 +150,9 @@ func TestMetricsWithChiRoutePatterns(t *testing.T) {
 	// Add a parameterized route
 	router.Get("/users/{id}", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("user"))
+		if _, err := w.Write([]byte("user")); err != nil {
+			t.Errorf("Failed to write response: %v", err)
+		}
 	})
 
 	// Mount metrics endpoint

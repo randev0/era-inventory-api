@@ -32,7 +32,7 @@ func (s *Server) listItems(w http.ResponseWriter, r *http.Request) {
 	if params.q != "" {
 		clauses = append(clauses, fmt.Sprintf("(name ILIKE $%d OR asset_tag ILIKE $%d)", arg, arg))
 		args = append(args, "%"+params.q+"%")
-		arg++
+		arg++ // increment for next parameter position
 	}
 
 	whereClause := ""
@@ -104,7 +104,9 @@ func (s *Server) getItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(it)
+	if err := json.NewEncoder(w).Encode(it); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
 }
 
 func (s *Server) createItem(w http.ResponseWriter, r *http.Request) {
@@ -137,7 +139,9 @@ func (s *Server) createItem(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(in)
+	if err := json.NewEncoder(w).Encode(in); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
 }
 
 func (s *Server) updateItem(w http.ResponseWriter, r *http.Request) {

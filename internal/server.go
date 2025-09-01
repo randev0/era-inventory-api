@@ -140,27 +140,7 @@ window.ui = SwaggerUIBundle({ url: '/openapi.yaml', dom_id: '#swagger-ui' });
 	})
 }
 
-// mountPublicRoutes mounts public routes that bypass auth middleware
-func (s *Server) mountPublicRoutes() {
-	// Create a new router for public routes
-	publicRouter := chi.NewRouter()
 
-	// Public routes (no auth required)
-	publicRouter.Get("/health", func(w http.ResponseWriter, _ *http.Request) { w.Write([]byte("ok")) })
-	publicRouter.Get("/dbping", func(w http.ResponseWriter, _ *http.Request) { w.Write([]byte("db: ok")) })
-
-	// Mount docs (public)
-	s.mountDocs(publicRouter)
-
-	// Mount metrics if enabled
-	if os.Getenv("ENABLE_METRICS") == "true" {
-		publicRouter.Use(s.Metrics.Middleware())
-		publicRouter.Get("/metrics", s.Metrics.Handler().ServeHTTP)
-	}
-
-	// Mount public router to main router
-	s.Router.Mount("/", publicRouter)
-}
 
 // mountProtectedRoutes mounts all protected routes that require authentication
 func (s *Server) mountProtectedRoutes(r chi.Router) {

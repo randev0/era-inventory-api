@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"os"
-	"strconv"
 )
 
 type ctxKey string
@@ -51,8 +50,4 @@ func dbFrom(ctx context.Context, db *sql.DB) querier {
 	return db // fallback
 }
 
-func parseOrgID(s string) int64 {
-	id, _ := strconv.ParseInt(s, 10, 64)
-	if id <= 0 { id = 1 }
-	return id
-}
+
