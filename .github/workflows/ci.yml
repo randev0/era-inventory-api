@@ -1,6 +1,8 @@
 name: CI
 
-on: [push, pull_request]
+# Disabled - using test.yml for comprehensive CI
+on: 
+  workflow_dispatch:
 
 jobs:
   build:
@@ -39,4 +41,4 @@ jobs:
             psql "$DB_DSN" -v ON_ERROR_STOP=1 -f "$f"
           done
       - name: Tests
-        run: go test ./... -v
+        run: go test ./internal/... -v
