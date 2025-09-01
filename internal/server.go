@@ -56,8 +56,16 @@ func NewServer(dsn string, cfg *config.Config) *Server {
 		Metrics:    metrics,
 	}
 	// Mount public routes FIRST (no middleware)
-	s.Router.Get("/health", func(w http.ResponseWriter, _ *http.Request) { w.Write([]byte("ok")) })
-	s.Router.Get("/dbping", func(w http.ResponseWriter, _ *http.Request) { w.Write([]byte("db: ok")) })
+	s.Router.Get("/health", func(w http.ResponseWriter, _ *http.Request) { 
+		if _, err := w.Write([]byte("ok")); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+	})
+	s.Router.Get("/dbping", func(w http.ResponseWriter, _ *http.Request) { 
+		if _, err := w.Write([]byte("db: ok")); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+	})
 	s.mountDocs(s.Router)
 
 	// Mount metrics if enabled
@@ -118,7 +126,9 @@ func (s *Server) mountDocs(mux *chi.Mux) {
 			return
 		}
 		w.Header().Set("Content-Type", "application/x-yaml")
-		w.Write(data)
+		if _, err := w.Write(data); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
 	})
 
 	// Serve a minimal Swagger UI page from CDN

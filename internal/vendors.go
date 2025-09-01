@@ -94,7 +94,9 @@ func (s *Server) getVendor(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(v)
+	if err := json.NewEncoder(w).Encode(v); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
 }
 
 func (s *Server) createVendor(w http.ResponseWriter, r *http.Request) {
@@ -122,7 +124,9 @@ func (s *Server) createVendor(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(in)
+	if err := json.NewEncoder(w).Encode(in); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
 }
 
 func (s *Server) updateVendor(w http.ResponseWriter, r *http.Request) {
@@ -180,7 +184,9 @@ func (s *Server) updateVendor(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(out)
+	if err := json.NewEncoder(w).Encode(out); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
 }
 
 func (s *Server) deleteVendor(w http.ResponseWriter, r *http.Request) {
