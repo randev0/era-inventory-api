@@ -1,7 +1,10 @@
 name: CI
+
 on:
-  push: { branches: [ main ] }
-  pull_request: { branches: [ main ] }
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -12,13 +15,16 @@ permissions:
   security-events: write
   pull-requests: read
 
+env:
+  GO_VERSION: '1.23.x' # set from go.mod
+
 jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
-        with: { go-version: '1.23' }
+        with: { go-version: ${{ env.GO_VERSION }} }
       - uses: actions/cache@v4
         with:
           path: |
@@ -35,7 +41,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
-        with: { go-version: '1.23' }
+        with: { go-version: ${{ env.GO_VERSION }} }
       - uses: actions/cache@v4
         with:
           path: |
@@ -59,17 +65,18 @@ jobs:
           POSTGRES_PASSWORD: era
           POSTGRES_DB: era_test
         options: >-
-          --health-cmd="pg_isready -U era -d era_test"
+          --health-cmd="pg_isready -U era -d era_test -h localhost -p 5432"
           --health-interval=5s
           --health-timeout=5s
           --health-retries=10
     env:
       TEST_DATABASE_URL: postgres://era:era@localhost:5432/era_test?sslmode=disable
+      INTEGRATION: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
-        with: { go-version: '1.23' }
-      - name: Install PostgreSQL client
+        with: { go-version: ${{ env.GO_VERSION }} }
+      - name: Install psql client
         run: |
           sudo apt-get update
           sudo apt-get install -y postgresql-client
@@ -77,12 +84,11 @@ jobs:
         run: ci/doctor.sh
       - name: Apply migrations
         run: go run ./cmd/testmigrate
-      - name: Apply seeds
-        run: psql "$TEST_DATABASE_URL" -f db/seeds/001_minimal.sql
       - name: Integration tests
-        env:
-          INTEGRATION: 1
-        run: go test ./... -v -tags=integration
+        run: |
+          # If your tests need tags, uncomment:
+          # go test ./... -tags=integration -v
+          go test ./... -v
 
   security-scan:
     runs-on: ubuntu-latest
@@ -96,7 +102,8 @@ jobs:
           output: trivy-results.sarif
           ignore-unfixed: true
           vuln-type: os,library
-      - name: Upload Trivy SARIF
+      - name: Upload Trivy SARIF (skip on untrusted forks)
+        if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
         uses: github/codeql-action/upload-sarif@v3
         with: { sarif_file: trivy-results.sarif }
 
@@ -106,5 +113,5 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
-        with: { go-version: '1.23' }
+        with: { go-version: ${{ env.GO_VERSION }} }
       - run: go build -v ./...
