@@ -71,9 +71,9 @@ jobs:
       postgres:
         image: postgres:16-alpine
         env:
-          POSTGRES_DB: era_test
-          POSTGRES_USER: era
-          POSTGRES_PASSWORD: era
+          POSTGRES_DB: postgres
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
@@ -114,8 +114,21 @@ jobs:
 
       - name: Wait for Postgres
         run: |
-          until pg_isready -h localhost -p 5432 -U era -d era_test; do
+          until pg_isready -h localhost -p 5432 -U postgres; do
             echo "Waiting for Postgres..."
+            sleep 1
+          done
+
+      - name: Create era user and database
+        run: |
+          PGPASSWORD=postgres psql -h localhost -p 5432 -U postgres -c "CREATE USER era WITH PASSWORD 'era';" || true
+          PGPASSWORD=postgres psql -h localhost -p 5432 -U postgres -c "CREATE DATABASE era_test OWNER era;" || true
+          PGPASSWORD=postgres psql -h localhost -p 5432 -U postgres -c "GRANT ALL PRIVILEGES ON DATABASE era_test TO era;" || true
+
+      - name: Verify era user connection
+        run: |
+          until pg_isready -h localhost -p 5432 -U era -d era_test; do
+            echo "Waiting for era user connection..."
             sleep 1
           done
 
