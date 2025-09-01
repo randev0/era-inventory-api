@@ -117,6 +117,26 @@ make test-int
 make test-int-down
 ```
 
+### Local Test Database
+To run tests locally with the same database configuration as CI:
+
+```bash
+# Start a local PostgreSQL instance with Docker
+docker run --rm -e POSTGRES_USER=era -e POSTGRES_PASSWORD=era -e POSTGRES_DB=era_test -p 5432:5432 postgres:16-alpine
+
+# Set the test database URL
+export TEST_DATABASE_URL=postgres://era:era@localhost:5432/era_test?sslmode=disable
+
+# Run migrations
+go run ./cmd/testmigrate
+
+# Apply seeds
+psql "$TEST_DATABASE_URL" -f db/seeds/001_minimal.sql
+
+# Run integration tests
+INTEGRATION=1 go test ./... -v -tags=integration
+```
+
 ## 🔧 Development Tools
 
 ### Makefile Targets

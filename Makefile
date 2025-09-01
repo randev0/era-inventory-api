@@ -128,6 +128,12 @@ security-scan: ## Run security scan on Docker image
 		-v $(PWD):/workspace \
 		aquasec/trivy image $(IMAGE_NAME):$(VERSION)
 
+.PHONY: ci
+ci: ## Run full CI pipeline locally
+	golangci-lint run --timeout=5m
+	go test ./... -race
+	TEST_DATABASE_URL="postgres://era:era@localhost:5432/era_test?sslmode=disable" go test ./... -v -tags=integration
+
 .PHONY: all up migrate seed test openapi-validate logs psql docs metrics
 
 all: migrate seed openapi-validate test
