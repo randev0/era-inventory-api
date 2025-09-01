@@ -121,9 +121,14 @@ jobs:
 
       - name: Create era user and database
         run: |
+          echo "Creating era user and database..."
           PGPASSWORD=postgres psql -h localhost -p 5432 -U postgres -c "CREATE USER era WITH PASSWORD 'era';" || true
           PGPASSWORD=postgres psql -h localhost -p 5432 -U postgres -c "CREATE DATABASE era_test OWNER era;" || true
           PGPASSWORD=postgres psql -h localhost -p 5432 -U postgres -c "GRANT ALL PRIVILEGES ON DATABASE era_test TO era;" || true
+          echo "Verifying era user exists..."
+          PGPASSWORD=postgres psql -h localhost -p 5432 -U postgres -c "\du era"
+          echo "Verifying era_test database exists..."
+          PGPASSWORD=postgres psql -h localhost -p 5432 -U postgres -c "\l era_test"
 
       - name: Verify era user connection
         run: |
