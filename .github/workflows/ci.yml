@@ -24,7 +24,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
-        with: { go-version: ${{ env.GO_VERSION }} }
+        with:
+          go-version: ${{ env.GO_VERSION }}
       - uses: actions/cache@v4
         with:
           path: |
@@ -33,7 +34,8 @@ jobs:
           key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
           restore-keys: ${{ runner.os }}-go-
       - uses: golangci/golangci-lint-action@v6
-        with: { version: v1.60 }
+        with:
+          version: v1.60
       - run: golangci-lint run --timeout=5m
 
   unit-test:
@@ -41,7 +43,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
-        with: { go-version: ${{ env.GO_VERSION }} }
+        with:
+          go-version: ${{ env.GO_VERSION }}
       - uses: actions/cache@v4
         with:
           path: |
@@ -52,7 +55,9 @@ jobs:
       - name: Unit tests (race + coverage)
         run: go test ./... -race -coverprofile=coverage.out -covermode=atomic
       - uses: actions/upload-artifact@v4
-        with: { name: coverage, path: coverage.out }
+        with:
+          name: coverage
+          path: coverage.out
 
   integration-test:
     runs-on: ubuntu-latest
@@ -75,7 +80,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
-        with: { go-version: ${{ env.GO_VERSION }} }
+        with:
+          go-version: ${{ env.GO_VERSION }}
       - name: Install psql client
         run: |
           sudo apt-get update
@@ -105,7 +111,8 @@ jobs:
       - name: Upload Trivy SARIF (skip on untrusted forks)
         if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
         uses: github/codeql-action/upload-sarif@v3
-        with: { sarif_file: trivy-results.sarif }
+        with:
+          sarif_file: trivy-results.sarif
 
   build:
     needs: [lint, unit-test, integration-test, security-scan]
@@ -113,5 +120,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
-        with: { go-version: ${{ env.GO_VERSION }} }
+        with:
+          go-version: ${{ env.GO_VERSION }}
       - run: go build -v ./...
