@@ -7,18 +7,36 @@ on:
     branches: [ main ]
     paths: [ '**/*.go', 'go.mod', 'go.sum' ]
   schedule:
-    - cron: '0 3 * * 1' # weekly
+    - cron: '0 3 * * 1'
 
 permissions:
   contents: read
   security-events: write
 
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   analyze:
     runs-on: ubuntu-latest
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
     steps:
       - uses: actions/checkout@v4
+
+      # Ensure Go matches go.mod (read version automatically)
+      - name: Read Go version
+        id: goversion
+        run: echo "version=$(grep -E '^go [0-9]+' go.mod | awk '{print $2}').x" >> $GITHUB_OUTPUT
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ steps.goversion.outputs.version }}
+
       - uses: github/codeql-action/init@v3
         with:
           languages: go
+
+      # Add autobuild to avoid "database creation failed"
+      - uses: github/codeql-action/autobuild@v3
+
       - uses: github/codeql-action/analyze@v3
