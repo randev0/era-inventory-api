@@ -41,7 +41,9 @@ func sendListResponse(w http.ResponseWriter, data []interface{}, total int, para
 		},
 	}
 
-	json.NewEncoder(w).Encode(response)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
 }
 
 // parseListParams parses limit, offset, q, and sort from the request

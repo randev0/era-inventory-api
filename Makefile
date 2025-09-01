@@ -32,7 +32,7 @@ test-int-up: ## Spin up test DB
 
 .PHONY: test-int-db
 test-int-db: ## Migrate + seed test DB
-	TEST_DATABASE_URL=$${TEST_DATABASE_URL:-postgres://era:era@localhost:5433/era_test?sslmode=disable} \
+	TEST_DATABASE_URL=$${TEST_DATABASE_URL:-postgres://era:era@localhost:5432/era_test?sslmode=disable} \
 	go run ./cmd/testmigrate && psql "$$TEST_DATABASE_URL" -f db/seeds/001_minimal.sql || true
 
 .PHONY: test-int
@@ -127,6 +127,12 @@ security-scan: ## Run security scan on Docker image
 	docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
 		-v $(PWD):/workspace \
 		aquasec/trivy image $(IMAGE_NAME):$(VERSION)
+
+.PHONY: ci
+ci: ## Run full CI pipeline locally
+	golangci-lint run --timeout=5m
+	go test ./... -race
+	TEST_DATABASE_URL="postgres://era:era@localhost:5432/era_test?sslmode=disable" INTEGRATION=1 go test ./... -v -tags=integration
 
 .PHONY: all up migrate seed test openapi-validate logs psql docs metrics
 

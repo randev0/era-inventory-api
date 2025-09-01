@@ -357,7 +357,7 @@ func TestContextFunctions(t *testing.T) {
 	ctx = context.WithValue(ctx, UserIDKey, int64(123))
 	ctx = context.WithValue(ctx, OrgIDKey, int64(456))
 	ctx = context.WithValue(ctx, RolesKey, []string{"admin"})
-	ctx = context.WithValue(ctx, "claims", claims)
+	ctx = context.WithValue(ctx, ClaimsKey, claims)
 
 	if UserIDFromContext(ctx) != 123 {
 		t.Errorf("Expected UserIDFromContext to return 123, got %d", UserIDFromContext(ctx))
@@ -534,7 +534,7 @@ func TestMustRole_SufficientPermissions(t *testing.T) {
 	
 	req := httptest.NewRequest("GET", "/items", nil)
 	// Set up context with claims that have required role
-	ctx := context.WithValue(req.Context(), "claims", &Claims{
+	ctx := context.WithValue(req.Context(), ClaimsKey, &Claims{
 		UserID: 1,
 		OrgID:  1,
 		Roles:  []string{"admin", "user"},
