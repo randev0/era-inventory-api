@@ -16,7 +16,7 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
-//go:embed openapi/openapi.yaml
+//go:embed openapi
 var openapiFS embed.FS
 
 type Server struct {
@@ -56,12 +56,12 @@ func NewServer(dsn string, cfg *config.Config) *Server {
 		Metrics:    metrics,
 	}
 	// Mount public routes FIRST (no middleware)
-	s.Router.Get("/health", func(w http.ResponseWriter, _ *http.Request) { 
+	s.Router.Get("/health", func(w http.ResponseWriter, _ *http.Request) {
 		if _, err := w.Write([]byte("ok")); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 	})
-	s.Router.Get("/dbping", func(w http.ResponseWriter, _ *http.Request) { 
+	s.Router.Get("/dbping", func(w http.ResponseWriter, _ *http.Request) {
 		if _, err := w.Write([]byte("db: ok")); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
@@ -131,26 +131,58 @@ func (s *Server) mountDocs(mux *chi.Mux) {
 		}
 	})
 
-	// Serve a minimal Swagger UI page from CDN
+	// Serve enhanced Swagger UI page
 	mux.HandleFunc("/docs", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.WriteHeader(200)
 		w.Write([]byte(`<!doctype html>
-<html>
-<head><meta charset="utf-8"><title>Era Inventory API — Docs</title>
-<link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist/swagger-ui.css"></link>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Era Inventory API - Documentation</title>
+    <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5.9.0/swagger-ui.css">
+    <style>
+        body { margin: 0; background: #f7f7f7; }
+        .swagger-ui .topbar { background: #1f2937; border-bottom: 3px solid #3b82f6; }
+        .swagger-ui .topbar .download-url-wrapper { display: none; }
+        .swagger-ui .info { margin: 20px 0; }
+        .swagger-ui .info .title { color: #1f2937; }
+    </style>
+</head>
 <body>
-<div id="swagger-ui"></div>
-<script src="https://unpkg.com/swagger-ui-dist/swagger-ui-bundle.js"></script>
-<script>
-window.ui = SwaggerUIBundle({ url: '/openapi.yaml', dom_id: '#swagger-ui' });
-</script>
+    <div id="swagger-ui"></div>
+    <script src="https://unpkg.com/swagger-ui-dist@5.9.0/swagger-ui-bundle.js"></script>
+    <script>
+        window.onload = function() {
+            window.ui = SwaggerUIBundle({
+                url: '/openapi.yaml',
+                dom_id: '#swagger-ui',
+                deepLinking: true,
+                presets: [
+                    SwaggerUIBundle.presets.apis,
+                    SwaggerUIBundle.presets.standalone
+                ],
+                plugins: [
+                    SwaggerUIBundle.plugins.DownloadUrl
+                ],
+                layout: "StandaloneLayout",
+                tryItOutEnabled: true,
+                requestInterceptor: function(req) {
+                    // Add custom headers or modify requests here if needed
+                    return req;
+                },
+                responseInterceptor: function(res) {
+                    // Handle responses here if needed
+                    return res;
+                }
+            });
+        };
+    </script>
 </body>
 </html>`))
 	})
 }
-
-
 
 // mountProtectedRoutes mounts all protected routes that require authentication
 func (s *Server) mountProtectedRoutes(r chi.Router) {
