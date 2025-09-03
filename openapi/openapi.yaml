@@ -1,0 +1,3024 @@
+openapi: 3.0.3
+info:
+  title: Era Inventory API
+  description: |
+    # Era Inventory Management API
+    
+    A comprehensive REST API for managing inventory items, sites, vendors, and projects with multi-tenant organization isolation.
+    
+    ## Features
+    - **Multi-tenant Architecture**: Organization-based data isolation using Row Level Security (RLS)
+    - **Role-based Access Control**: Fine-grained permissions (org_admin, project_admin)
+    - **JWT Authentication**: Secure token-based authentication
+    - **Comprehensive CRUD Operations**: Full lifecycle management for all entities
+    - **Advanced Search & Filtering**: Text search with pagination and sorting
+    - **Error Handling**: Detailed error codes and messages for all scenarios
+    
+    ## Authentication
+    All API endpoints (except health checks) require JWT authentication via the `Authorization: Bearer <token>` header.
+    
+    ### JWT Token Structure
+    ```json
+    {
+      "sub": "1",           // User ID
+      "org_id": 1,          // Organization ID
+      "roles": ["org_admin"], // User roles
+      "iss": "era-inventory",
+      "aud": "era-inventory-api",
+      "exp": 1640995200,
+      "iat": 1640908800,
+      "nbf": 1640908800
+    }
+    ```
+    
+    ### Role Permissions
+    - **org_admin**: Full access to all operations within the organization
+    - **project_admin**: Can create/update items, read-only access to other entities
+    
+    ## Error Handling
+    All errors follow a consistent format with specific error codes for different scenarios.
+    
+    ## Rate Limiting
+    API requests are rate limited to prevent abuse. Check response headers for current limits.
+    
+  version: 1.0.0
+  contact:
+    name: Era Inventory Team
+    email: support@era-inventory.com
+    url: https://era-inventory.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+  termsOfService: https://era-inventory.com/terms
+
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+  - url: https://api-staging.era-inventory.com
+    description: Staging environment
+  - url: https://api.era-inventory.com
+    description: Production environment
+
+security:
+  - bearerAuth: []
+
+paths:
+  # Health & System Endpoints
+  /health:
+    get:
+      summary: Health Check
+      description: |
+        Simple health check endpoint that returns the service status.
+        This endpoint does not require authentication.
+      tags: [System]
+      security: []  # No authentication required
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: "ok"
+              examples:
+                healthy:
+                  summary: Healthy service
+                  value: "ok"
+        '500':
+          description: Service is unhealthy
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: "error"
+
+  /dbping:
+    get:
+      summary: Database Health Check
+      description: |
+        Database connectivity health check endpoint.
+        This endpoint does not require authentication.
+      tags: [System]
+      security: []  # No authentication required
+      responses:
+        '200':
+          description: Database connection is healthy
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: "db: ok"
+              examples:
+                healthy:
+                  summary: Database healthy
+                  value: "db: ok"
+        '500':
+          description: Database connection failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                db_error:
+                  summary: Database connection error
+                  value:
+                    error: "Database connection failed"
+                    code: "DATABASE_ERROR"
+
+  /docs:
+    get:
+      summary: API Documentation
+      description: |
+        Interactive Swagger UI documentation for the API.
+        This endpoint does not require authentication.
+      tags: [System]
+      security: []  # No authentication required
+      responses:
+        '200':
+          description: Swagger UI HTML page
+          content:
+            text/html:
+              schema:
+                type: string
+
+  /openapi.yaml:
+    get:
+      summary: OpenAPI Specification
+      description: |
+        Raw OpenAPI 3.0.3 specification in YAML format.
+        This endpoint does not require authentication.
+      tags: [System]
+      security: []  # No authentication required
+      responses:
+        '200':
+          description: OpenAPI specification
+          content:
+            application/x-yaml:
+              schema:
+                type: string
+
+  # Items Endpoints
+  /items:
+    get:
+      summary: List Inventory Items
+      description: |
+        Retrieve a paginated list of inventory items for the authenticated user's organization.
+        
+        ### Features
+        - **Pagination**: Use `limit` and `offset` parameters
+        - **Search**: Use `q` parameter to search by name or asset_tag
+        - **Sorting**: Use `sort` parameter (e.g., `name`, `-created_at`)
+        - **Organization Isolation**: Only returns items from user's organization
+        
+        ### Search Examples
+        - `?q=switch` - Find items with "switch" in name or asset_tag
+        - `?sort=name` - Sort by name ascending
+        - `?sort=-created_at` - Sort by creation date descending
+        - `?limit=10&offset=20` - Get items 21-30
+      tags: [Items]
+      parameters:
+        - $ref: '#/components/parameters/LimitParam'
+        - $ref: '#/components/parameters/OffsetParam'
+        - $ref: '#/components/parameters/SearchParam'
+        - $ref: '#/components/parameters/SortParam'
+      responses:
+        '200':
+          description: List of inventory items
+          headers:
+            X-Total-Count:
+              description: Total number of items matching the filter
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ListResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Item'
+              examples:
+                items_list:
+                  summary: List of items
+                  value:
+                    data:
+                      - id: 1
+                        asset_tag: "SW-001"
+                        name: "Access Switch"
+                        manufacturer: "Cisco"
+                        model: "C2960X"
+                        device_type: "Switch"
+                        site: "Main Office"
+                        installed_at: "2023-01-15T10:30:00Z"
+                        warranty_end: "2026-01-15T00:00:00Z"
+                        notes: "24-port gigabit switch"
+                        created_at: "2023-01-10T09:00:00Z"
+                        updated_at: "2023-01-15T10:30:00Z"
+                      - id: 2
+                        asset_tag: "RT-001"
+                        name: "Core Router"
+                        manufacturer: "Juniper"
+                        model: "EX4300"
+                        device_type: "Router"
+                        site: "Data Center"
+                        installed_at: "2023-01-20T14:00:00Z"
+                        warranty_end: "2026-01-20T00:00:00Z"
+                        notes: null
+                        created_at: "2023-01-18T11:00:00Z"
+                        updated_at: "2023-01-20T14:00:00Z"
+                    page:
+                      limit: 50
+                      offset: 0
+                      total: 2
+                empty_list:
+                  summary: Empty list
+                  value:
+                    data: []
+                    page:
+                      limit: 50
+                      offset: 0
+                      total: 0
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    post:
+      summary: Create Inventory Item
+      description: |
+        Create a new inventory item in the authenticated user's organization.
+        
+        ### Required Permissions
+        - `org_admin` or `project_admin` role
+        
+        ### Validation Rules
+        - `asset_tag` must be unique within the organization
+        - `name` is required and cannot be empty
+        - Date fields must be in ISO 8601 format
+        
+        ### Business Rules
+        - Item is automatically associated with the user's organization
+        - `created_at` and `updated_at` are automatically set
+      tags: [Items]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ItemInput'
+            examples:
+              basic_item:
+                summary: Basic item creation
+                value:
+                  asset_tag: "SW-002"
+                  name: "Distribution Switch"
+                  manufacturer: "Cisco"
+                  model: "C3850"
+                  device_type: "Switch"
+                  site: "Branch Office"
+              full_item:
+                summary: Complete item with all fields
+                value:
+                  asset_tag: "SRV-001"
+                  name: "Web Server"
+                  manufacturer: "Dell"
+                  model: "PowerEdge R740"
+                  device_type: "Server"
+                  site: "Data Center"
+                  installed_at: "2023-02-01T09:00:00Z"
+                  warranty_end: "2026-02-01T00:00:00Z"
+                  notes: "Primary web application server"
+      responses:
+        '201':
+          description: Item created successfully
+          headers:
+            Location:
+              description: URL of the created item
+              schema:
+                type: string
+                format: uri
+                example: "/items/123"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Item'
+              examples:
+                created_item:
+                  summary: Successfully created item
+                  value:
+                    id: 3
+                    asset_tag: "SW-002"
+                    name: "Distribution Switch"
+                    manufacturer: "Cisco"
+                    model: "C3850"
+                    device_type: "Switch"
+                    site: "Branch Office"
+                    installed_at: null
+                    warranty_end: null
+                    notes: null
+                    created_at: "2023-02-15T14:30:00Z"
+                    updated_at: "2023-02-15T14:30:00Z"
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                missing_required:
+                  summary: Missing required fields
+                  value:
+                    error: "Validation failed: name is required"
+                    code: "VALIDATION_ERROR"
+                invalid_date:
+                  summary: Invalid date format
+                  value:
+                    error: "Invalid date format for installed_at"
+                    code: "INVALID_DATE_FORMAT"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          description: Asset tag conflict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                duplicate_asset_tag:
+                  summary: Asset tag already exists
+                  value:
+                    error: "Asset tag 'SW-002' already exists"
+                    code: "DUPLICATE_ASSET_TAG"
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /items/{id}:
+    parameters:
+      - $ref: '#/components/parameters/ItemIdParam'
+
+    get:
+      summary: Get Inventory Item
+      description: |
+        Retrieve a specific inventory item by ID.
+        
+        ### Organization Isolation
+        Only returns items from the authenticated user's organization.
+      tags: [Items]
+      responses:
+        '200':
+          description: Item details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Item'
+              examples:
+                item_details:
+                  summary: Complete item details
+                  value:
+                    id: 1
+                    asset_tag: "SW-001"
+                    name: "Access Switch"
+                    manufacturer: "Cisco"
+                    model: "C2960X"
+                    device_type: "Switch"
+                    site: "Main Office"
+                    installed_at: "2023-01-15T10:30:00Z"
+                    warranty_end: "2026-01-15T00:00:00Z"
+                    notes: "24-port gigabit switch"
+                    created_at: "2023-01-10T09:00:00Z"
+                    updated_at: "2023-01-15T10:30:00Z"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    put:
+      summary: Update Inventory Item
+      description: |
+        Update an existing inventory item.
+        
+        ### Required Permissions
+        - `org_admin` or `project_admin` role
+        
+        ### Validation Rules
+        - `asset_tag` must remain unique within the organization
+        - Cannot update items from other organizations
+        - All fields are optional in the request body
+        
+        ### Business Rules
+        - `updated_at` is automatically updated
+        - Partial updates are supported
+      tags: [Items]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ItemInput'
+            examples:
+              partial_update:
+                summary: Update only some fields
+                value:
+                  name: "Updated Switch Name"
+                  notes: "Updated notes"
+              full_update:
+                summary: Update all fields
+                value:
+                  asset_tag: "SW-001-UPD"
+                  name: "Updated Access Switch"
+                  manufacturer: "Cisco"
+                  model: "C2960X-48TD-L"
+                  device_type: "Switch"
+                  site: "Updated Office"
+                  installed_at: "2023-01-20T10:30:00Z"
+                  warranty_end: "2027-01-20T00:00:00Z"
+                  notes: "Updated 48-port gigabit switch"
+      responses:
+        '200':
+          description: Item updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Item'
+              examples:
+                updated_item:
+                  summary: Successfully updated item
+                  value:
+                    id: 1
+                    asset_tag: "SW-001-UPD"
+                    name: "Updated Access Switch"
+                    manufacturer: "Cisco"
+                    model: "C2960X-48TD-L"
+                    device_type: "Switch"
+                    site: "Updated Office"
+                    installed_at: "2023-01-20T10:30:00Z"
+                    warranty_end: "2027-01-20T00:00:00Z"
+                    notes: "Updated 48-port gigabit switch"
+                    created_at: "2023-01-10T09:00:00Z"
+                    updated_at: "2023-02-15T16:45:00Z"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Asset tag conflict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                duplicate_asset_tag:
+                  summary: Asset tag already exists
+                  value:
+                    error: "Asset tag 'SW-001-UPD' already exists"
+                    code: "DUPLICATE_ASSET_TAG"
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    delete:
+      summary: Delete Inventory Item
+      description: |
+        Delete an inventory item.
+        
+        ### Required Permissions
+        - `org_admin` role only
+        
+        ### Business Rules
+        - Cannot delete items from other organizations
+        - Deletion is permanent and cannot be undone
+        - Associated data may be affected
+      tags: [Items]
+      responses:
+        '204':
+          description: Item deleted successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Insufficient permissions (org_admin required)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                insufficient_permissions:
+                  summary: Only org_admin can delete items
+                  value:
+                    error: "Insufficient permissions"
+                    code: "INSUFFICIENT_PERMISSIONS"
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  # Sites Endpoints
+  /sites:
+    get:
+      summary: List Sites
+      description: |
+        Retrieve a paginated list of sites for the authenticated user's organization.
+        
+        ### Features
+        - **Pagination**: Use `limit` and `offset` parameters
+        - **Search**: Use `q` parameter to search by site name
+        - **Sorting**: Use `sort` parameter
+        - **Organization Isolation**: Only returns sites from user's organization
+      tags: [Sites]
+      parameters:
+        - $ref: '#/components/parameters/LimitParam'
+        - $ref: '#/components/parameters/OffsetParam'
+        - $ref: '#/components/parameters/SearchParam'
+        - $ref: '#/components/parameters/SortParam'
+      responses:
+        '200':
+          description: List of sites
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ListResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Site'
+              examples:
+                sites_list:
+                  summary: List of sites
+                  value:
+                    data:
+                      - id: 1
+                        name: "Main Office"
+                        location: "123 Business St, City, State 12345"
+                        notes: "Primary headquarters location"
+                        created_at: "2023-01-01T00:00:00Z"
+                        updated_at: "2023-01-01T00:00:00Z"
+                      - id: 2
+                        name: "Data Center"
+                        location: "456 Tech Blvd, Tech City, State 67890"
+                        notes: null
+                        created_at: "2023-01-05T00:00:00Z"
+                        updated_at: "2023-01-05T00:00:00Z"
+                    page:
+                      limit: 50
+                      offset: 0
+                      total: 2
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    post:
+      summary: Create Site
+      description: |
+        Create a new site in the authenticated user's organization.
+        
+        ### Required Permissions
+        - `org_admin` role
+        
+        ### Validation Rules
+        - `name` is required and cannot be empty
+        - `location` and `notes` are optional
+      tags: [Sites]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SiteInput'
+            examples:
+              basic_site:
+                summary: Basic site creation
+                value:
+                  name: "Branch Office"
+                  location: "789 Branch Ave, Branch City, State 11111"
+              minimal_site:
+                summary: Site with name only
+                value:
+                  name: "Remote Location"
+      responses:
+        '201':
+          description: Site created successfully
+          headers:
+            Location:
+              description: URL of the created site
+              schema:
+                type: string
+                format: uri
+                example: "/sites/123"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Site'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /sites/{id}:
+    parameters:
+      - $ref: '#/components/parameters/SiteIdParam'
+
+    get:
+      summary: Get Site
+      description: |
+        Retrieve a specific site by ID.
+        
+        ### Organization Isolation
+        Only returns sites from the authenticated user's organization.
+      tags: [Sites]
+      responses:
+        '200':
+          description: Site details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Site'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    put:
+      summary: Update Site
+      description: |
+        Update an existing site.
+        
+        ### Required Permissions
+        - `org_admin` role
+      tags: [Sites]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SiteInput'
+      responses:
+        '200':
+          description: Site updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Site'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    delete:
+      summary: Delete Site
+      description: |
+        Delete a site.
+        
+        ### Required Permissions
+        - `org_admin` role
+      tags: [Sites]
+      responses:
+        '204':
+          description: Site deleted successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  # Vendors Endpoints
+  /vendors:
+    get:
+      summary: List Vendors
+      description: |
+        Retrieve a paginated list of vendors for the authenticated user's organization.
+      tags: [Vendors]
+      parameters:
+        - $ref: '#/components/parameters/LimitParam'
+        - $ref: '#/components/parameters/OffsetParam'
+        - $ref: '#/components/parameters/SearchParam'
+        - $ref: '#/components/parameters/SortParam'
+      responses:
+        '200':
+          description: List of vendors
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ListResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Vendor'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    post:
+      summary: Create Vendor
+      description: |
+        Create a new vendor in the authenticated user's organization.
+        
+        ### Required Permissions
+        - `org_admin` role
+      tags: [Vendors]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VendorInput'
+      responses:
+        '201':
+          description: Vendor created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Vendor'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /vendors/{id}:
+    parameters:
+      - $ref: '#/components/parameters/VendorIdParam'
+
+    get:
+      summary: Get Vendor
+      description: Retrieve a specific vendor by ID.
+      tags: [Vendors]
+      responses:
+        '200':
+          description: Vendor details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Vendor'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    put:
+      summary: Update Vendor
+      description: |
+        Update an existing vendor.
+        
+        ### Required Permissions
+        - `org_admin` role
+      tags: [Vendors]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VendorInput'
+      responses:
+        '200':
+          description: Vendor updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Vendor'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    delete:
+      summary: Delete Vendor
+      description: |
+        Delete a vendor.
+        
+        ### Required Permissions
+        - `org_admin` role
+      tags: [Vendors]
+      responses:
+        '204':
+          description: Vendor deleted successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  # Projects Endpoints
+  /projects:
+    get:
+      summary: List Projects
+      description: |
+        Retrieve a paginated list of projects for the authenticated user's organization.
+      tags: [Projects]
+      parameters:
+        - $ref: '#/components/parameters/LimitParam'
+        - $ref: '#/components/parameters/OffsetParam'
+        - $ref: '#/components/parameters/SearchParam'
+        - $ref: '#/components/parameters/SortParam'
+      responses:
+        '200':
+          description: List of projects
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ListResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Project'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    post:
+      summary: Create Project
+      description: |
+        Create a new project in the authenticated user's organization.
+        
+        ### Required Permissions
+        - `org_admin` role
+        
+        ### Validation Rules
+        - `code` must be unique within the organization
+      tags: [Projects]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProjectInput'
+      responses:
+        '201':
+          description: Project created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          description: Project code conflict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                duplicate_code:
+                  summary: Project code already exists
+                  value:
+                    error: "Project code 'PROJ-001' already exists"
+                    code: "DUPLICATE_PROJECT_CODE"
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /projects/{id}:
+    parameters:
+      - $ref: '#/components/parameters/ProjectIdParam'
+
+    get:
+      summary: Get Project
+      description: Retrieve a specific project by ID.
+      tags: [Projects]
+      responses:
+        '200':
+          description: Project details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    put:
+      summary: Update Project
+      description: |
+        Update an existing project.
+        
+        ### Required Permissions
+        - `org_admin` role
+      tags: [Projects]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProjectInput'
+      responses:
+        '200':
+          description: Project updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Project code conflict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    delete:
+      summary: Delete Project
+      description: |
+        Delete a project.
+        
+        ### Required Permissions
+        - `org_admin` role
+      tags: [Projects]
+      responses:
+        '204':
+          description: Project deleted successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  # Asset Management Endpoints
+  /assets:
+    get:
+      summary: List Assets
+      description: |
+        Retrieve a paginated list of assets for the authenticated user's organization.
+        
+        ### Features
+        - **Pagination**: Use `limit` and `offset` parameters (limit capped at 100)
+        - **Search**: Use `q` parameter to search by name
+        - **Filtering**: Use `site_id` and `type` parameters
+        - **Sorting**: Use `sort` parameter (e.g., `name`, `-created_at`)
+        - **Organization Isolation**: Only returns assets from user's organization
+        
+        ### Filter Examples
+        - `?site_id=5` - Filter by site
+        - `?type=switch` - Filter by asset type
+        - `?q=core` - Search by name
+        - `?sort=name&limit=25` - Sort by name, limit to 25 results
+      tags: [Assets]
+      parameters:
+        - name: limit
+          in: query
+          description: Maximum number of assets to return (capped at 100)
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+        - $ref: '#/components/parameters/OffsetParam'
+        - $ref: '#/components/parameters/SearchParam'
+        - name: sort
+          in: query
+          description: Sort field and direction
+          schema:
+            type: string
+            enum: [id, name, asset_type, vendor, created_at, updated_at, -id, -name, -asset_type, -vendor, -created_at, -updated_at]
+        - name: site_id
+          in: query
+          description: Filter by site ID
+          schema:
+            type: integer
+            format: int64
+        - name: type
+          in: query
+          description: Filter by asset type
+          schema:
+            type: string
+            example: "switch"
+      responses:
+        '200':
+          description: List of assets
+          headers:
+            X-Total-Count:
+              description: Total number of assets matching the filter
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ListResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Asset'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    post:
+      summary: Create Asset
+      description: |
+        Create a new asset in the authenticated user's organization.
+        
+        ### Required Permissions
+        - `org_admin` or `project_admin` role
+        
+        ### Features
+        - **Hybrid Model**: Supports core asset data plus optional subtype data
+        - **Subtypes**: Include `switch` or `vlan` data for structured querying
+        - **Extras**: Store additional unstructured data in `extras` JSON field
+        - **Validation**: Serial numbers must be unique per site and asset type
+      tags: [Assets]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssetInput'
+            examples:
+              switch_asset:
+                summary: Create switch asset
+                value:
+                  site_id: 5
+                  asset_type: "switch"
+                  name: "Core-Switch-01"
+                  vendor: "Cisco"
+                  model: "C2960X"
+                  serial: "FCW1234ABCD"
+                  mgmt_ip: "192.168.1.10"
+                  status: "active"
+                  notes: "Primary core switch"
+                  extras:
+                    rack_unit: 1
+                    power_consumption: "150W"
+                  switch:
+                    ports_total: 48
+                    poe: true
+                    uplink_info: "2x 10G SFP+"
+                    firmware: "15.2(4)S7"
+              vlan_asset:
+                summary: Create VLAN asset
+                value:
+                  site_id: 5
+                  asset_type: "vlan"
+                  name: "Guest Network"
+                  status: "active"
+                  vlan:
+                    vlan_id: 100
+                    subnet: "192.168.100.0/24"
+                    gateway: "192.168.100.1"
+                    purpose: "Guest Network"
+      responses:
+        '201':
+          description: Asset created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Asset'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          description: Asset with this serial already exists for this site and type
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /assets/{id}:
+    get:
+      summary: Get Asset
+      description: |
+        Retrieve a specific asset by ID.
+        
+        ### Features
+        - **Organization Isolation**: Only returns assets from user's organization
+        - **Complete Data**: Returns full asset details including extras
+      tags: [Assets]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Asset ID
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Asset details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Asset'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    put:
+      summary: Update Asset
+      description: |
+        Update an existing asset.
+        
+        ### Required Permissions
+        - `org_admin` or `project_admin` role
+        
+        ### Features
+        - **Partial Updates**: Only provided fields are updated
+        - **Subtype Updates**: Can update switch or VLAN subtype data
+        - **Validation**: Serial numbers must be unique per site and asset type
+      tags: [Assets]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Asset ID
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssetInput'
+      responses:
+        '200':
+          description: Asset updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Asset'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Asset with this serial already exists for this site and type
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    delete:
+      summary: Delete Asset
+      description: |
+        Delete an asset and all its subtype data.
+        
+        ### Required Permissions
+        - `org_admin` role
+      tags: [Assets]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Asset ID
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '204':
+          description: Asset deleted successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /switches:
+    get:
+      summary: List Switches
+      description: |
+        Retrieve a paginated list of switch assets with subtype data.
+        
+        ### Features
+        - **Subtype Data**: Includes switch-specific attributes (ports, POE, firmware)
+        - **Pagination**: Use `limit` and `offset` parameters (limit capped at 100)
+        - **Search**: Use `q` parameter to search by name
+        - **Filtering**: Use `site_id` parameter
+        - **Sorting**: Use `sort` parameter
+        - **Organization Isolation**: Only returns switches from user's organization
+      tags: [Assets]
+      parameters:
+        - name: limit
+          in: query
+          description: Maximum number of switches to return (capped at 100)
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+        - $ref: '#/components/parameters/OffsetParam'
+        - $ref: '#/components/parameters/SearchParam'
+        - name: sort
+          in: query
+          description: Sort field and direction
+          schema:
+            type: string
+            enum: [id, name, vendor, created_at, updated_at, -id, -name, -vendor, -created_at, -updated_at]
+        - name: site_id
+          in: query
+          description: Filter by site ID
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: List of switches with subtype data
+          headers:
+            X-Total-Count:
+              description: Total number of switches matching the filter
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ListResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/AssetWithSubtypes'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /vlans:
+    get:
+      summary: List VLANs
+      description: |
+        Retrieve a paginated list of VLAN assets with subtype data.
+        
+        ### Features
+        - **Subtype Data**: Includes VLAN-specific attributes (VLAN ID, subnet, gateway)
+        - **Pagination**: Use `limit` and `offset` parameters (limit capped at 100)
+        - **Search**: Use `q` parameter to search by name
+        - **Filtering**: Use `site_id` parameter
+        - **Sorting**: Use `sort` parameter
+        - **Organization Isolation**: Only returns VLANs from user's organization
+      tags: [Assets]
+      parameters:
+        - name: limit
+          in: query
+          description: Maximum number of VLANs to return (capped at 100)
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+        - $ref: '#/components/parameters/OffsetParam'
+        - $ref: '#/components/parameters/SearchParam'
+        - name: sort
+          in: query
+          description: Sort field and direction
+          schema:
+            type: string
+            enum: [id, name, vlan_id, created_at, updated_at, -id, -name, -vlan_id, -created_at, -updated_at]
+        - name: site_id
+          in: query
+          description: Filter by site ID
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: List of VLANs with subtype data
+          headers:
+            X-Total-Count:
+              description: Total number of VLANs matching the filter
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ListResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/AssetWithSubtypes'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /sites/{id}/asset-categories:
+    get:
+      summary: Get Site Asset Categories
+      description: |
+        Retrieve dynamic asset categories for a specific site with counts.
+        
+        ### Features
+        - **Dynamic Categories**: Shows only asset types that exist at the site
+        - **Real-time Counts**: Counts are automatically maintained by database triggers
+        - **Organization Isolation**: Only returns categories from user's organization
+        
+        ### Use Cases
+        - **UI Filtering**: Show only relevant asset types in site-specific views
+        - **Dashboard**: Display asset type distribution per site
+        - **Reporting**: Generate site-specific asset reports
+      tags: [Assets]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Site ID
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: List of asset categories for the site
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SiteAssetCategory'
+              examples:
+                categories:
+                  summary: Site asset categories
+                  value:
+                    - org_id: 1
+                      site_id: 5
+                      asset_type: "switch"
+                      asset_count: 12
+                    - org_id: 1
+                      site_id: 5
+                      asset_type: "firewall"
+                      asset_count: 2
+                    - org_id: 1
+                      site_id: 5
+                      asset_type: "vlan"
+                      asset_count: 8
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  # Excel Import Endpoints
+  /imports/excel:
+    post:
+      summary: Upload Excel to import assets for a site
+      description: |
+        Upload an Excel (.xlsx) file to import assets into the system for a specific site.
+        
+        ### Features
+        - **Mapping-driven Import**: Uses YAML configuration to map Excel columns to database fields
+        - **Dry Run Support**: Test imports without making changes using `dry_run=true`
+        - **Idempotent Upserts**: Updates existing assets or creates new ones based on natural keys
+        - **Error Handling**: Detailed error reporting with row-level feedback
+        - **Organization Isolation**: Imports are scoped to the authenticated user's organization
+        - **Role-based Access**: Requires `project_admin` or `org_admin` role
+        
+        ### File Requirements
+        - **Format**: Only `.xlsx` files are accepted
+        - **Size Limit**: Maximum 20 MB file size
+        - **Content Type**: Must be `multipart/form-data`
+        
+        ### Import Process
+        1. **Validation**: File format and size validation
+        2. **Mapping**: Excel headers mapped to database fields using YAML configuration
+        3. **Parsing**: Data types parsed (IP, CIDR, INT, BOOL, TIMESTAMP, TEXT)
+        4. **Upsert**: Assets created or updated based on natural keys (serial, name, etc.)
+        5. **Subtypes**: Switch and VLAN data stored in subtype tables when applicable
+        6. **Extras**: Unknown columns stored in JSONB `extras` field
+        
+        ### Use Cases
+        - **Bulk Asset Import**: Import large inventories from Excel spreadsheets
+        - **Data Migration**: Migrate assets from other systems
+        - **Regular Updates**: Update existing asset information
+        - **Testing**: Use dry-run mode to validate data before import
+      tags: [Imports]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, site_id]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: Excel .xlsx file containing asset data
+                site_id:
+                  type: integer
+                  format: int64
+                  description: Target site ID for the imported assets
+                  example: 5
+                dry_run:
+                  type: boolean
+                  description: If true, perform validation without making changes
+                  default: false
+                  example: false
+                mapping:
+                  type: string
+                  description: Optional mapping configuration path (defaults to configs/mapping/mbip_equipment.yaml)
+                  example: "configs/mapping/mbip_equipment.yaml"
+                max_errors:
+                  type: integer
+                  description: Maximum number of errors before stopping import (default 50)
+                  minimum: 1
+                  maximum: 1000
+                  default: 50
+                  example: 50
+      responses:
+        '200':
+          description: Import completed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ImportSummary'
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+              examples:
+                success:
+                  summary: Successful import
+                  value:
+                    data:
+                      inserted: 15
+                      updated: 3
+                      skipped: 2
+                      errors: 0
+                      dry_run: false
+                      sheets:
+                        - name: "Equipment"
+                          inserted: 15
+                          updated: 3
+                          skipped: 2
+                          errors: 0
+                    meta:
+                      timestamp: "2024-01-15T10:30:00Z"
+                      version: "1.0.0"
+                dry_run:
+                  summary: Dry run validation
+                  value:
+                    data:
+                      inserted: 0
+                      updated: 0
+                      skipped: 0
+                      errors: 2
+                      dry_run: true
+                      sheets:
+                        - name: "Equipment"
+                          inserted: 0
+                          updated: 0
+                          skipped: 0
+                          errors: 2
+                          error_samples:
+                            - sheet: "Equipment"
+                              row: 5
+                              message: "Invalid IP address: 192.168.1.999"
+                            - sheet: "Equipment"
+                              row: 12
+                              message: "Required field 'name' is missing"
+                    meta:
+                      timestamp: "2024-01-15T10:30:00Z"
+                      version: "1.0.0"
+        '400':
+          description: Bad request - invalid file format, missing parameters, or file too large
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                invalid_file:
+                  summary: Invalid file format
+                  value:
+                    error: "INVALID_FILE_FORMAT"
+                    message: "only .xlsx files are accepted"
+                missing_site_id:
+                  summary: Missing site_id
+                  value:
+                    error: "MISSING_PARAMETER"
+                    message: "site_id is required and must be a positive integer"
+                file_too_large:
+                  summary: File too large
+                  value:
+                    error: "FILE_TOO_LARGE"
+                    message: "file size exceeds 20 MB limit"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Forbidden - insufficient permissions (requires project_admin or org_admin role)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                insufficient_permissions:
+                  summary: Insufficient permissions
+                  value:
+                    error: "INSUFFICIENT_PERMISSIONS"
+                    message: "project_admin or org_admin role required"
+        '422':
+          description: Import failed - validation errors or processing failures
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "IMPORT_FAILED"
+                  details:
+                    type: string
+                    example: "too many errors (52), stopping import"
+                  data:
+                    $ref: '#/components/schemas/ImportSummary'
+              examples:
+                too_many_errors:
+                  summary: Too many errors
+                  value:
+                    error: "IMPORT_FAILED"
+                    details: "too many errors (52), stopping import"
+                    data:
+                      inserted: 5
+                      updated: 2
+                      skipped: 10
+                      errors: 52
+                      dry_run: false
+                      sheets:
+                        - name: "Equipment"
+                          inserted: 5
+                          updated: 2
+                          skipped: 10
+                          errors: 52
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        JWT token for authentication. Include in the Authorization header as: `Bearer <token>`
+        
+        ### Token Generation
+        Use the `/auth/login` endpoint or the `jwtgen` utility to generate tokens.
+        
+        ### Token Claims
+        - `sub`: User ID
+        - `org_id`: Organization ID
+        - `roles`: Array of user roles
+        - `exp`: Token expiration timestamp
+        
+        ### Example
+        ```
+        Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        ```
+
+  parameters:
+    LimitParam:
+      name: limit
+      in: query
+      description: |
+        Maximum number of items to return.
+        Default: 50, Maximum: 200
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 50
+      example: 50
+
+    OffsetParam:
+      name: offset
+      in: query
+      description: |
+        Number of items to skip for pagination.
+        Default: 0
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+      example: 0
+
+    SearchParam:
+      name: q
+      in: query
+      description: |
+        Search query string. Searches across relevant text fields.
+        - Items: name, asset_tag
+        - Sites: name
+        - Vendors: name
+        - Projects: code, name
+      schema:
+        type: string
+        maxLength: 255
+      example: "switch"
+
+    SortParam:
+      name: sort
+      in: query
+      description: |
+        Sort field and direction. Use comma-separated values for multiple sorts.
+        Prefix with `-` for descending order.
+        
+        ### Available Fields
+        - Items: `id`, `name`, `asset_tag`, `created_at`, `updated_at`
+        - Sites: `id`, `name`, `created_at`, `updated_at`
+        - Vendors: `id`, `name`, `created_at`, `updated_at`
+        - Projects: `id`, `code`, `name`, `created_at`, `updated_at`
+      schema:
+        type: string
+        pattern: '^-?[a-zA-Z_][a-zA-Z0-9_]*(-,-?[a-zA-Z_][a-zA-Z0-9_]*)*$'
+      examples:
+        ascending:
+          summary: Sort by name ascending
+          value: "name"
+        descending:
+          summary: Sort by creation date descending
+          value: "-created_at"
+        multiple:
+          summary: Multiple sort fields
+          value: "name,-created_at"
+
+    ItemIdParam:
+      name: id
+      in: path
+      required: true
+      description: Unique identifier of the inventory item
+      schema:
+        type: integer
+        minimum: 1
+      example: 123
+
+    SiteIdParam:
+      name: id
+      in: path
+      required: true
+      description: Unique identifier of the site
+      schema:
+        type: integer
+        minimum: 1
+      example: 123
+
+    VendorIdParam:
+      name: id
+      in: path
+      required: true
+      description: Unique identifier of the vendor
+      schema:
+        type: integer
+        minimum: 1
+      example: 123
+
+    ProjectIdParam:
+      name: id
+      in: path
+      required: true
+      description: Unique identifier of the project
+      schema:
+        type: integer
+        minimum: 1
+      example: 123
+
+  schemas:
+    # Core Entity Schemas
+    Item:
+      type: object
+      description: Inventory item with complete details
+      properties:
+        id:
+          type: integer
+          description: Unique identifier for the item
+          readOnly: true
+          example: 123
+        asset_tag:
+          type: string
+          description: Unique asset tag identifier within the organization
+          maxLength: 100
+          example: "SW-001"
+        name:
+          type: string
+          description: Human-readable name of the item
+          maxLength: 255
+          example: "Access Switch"
+        manufacturer:
+          type: string
+          description: Manufacturer or brand name
+          maxLength: 100
+          nullable: true
+          example: "Cisco"
+        model:
+          type: string
+          description: Model number or identifier
+          maxLength: 100
+          nullable: true
+          example: "C2960X"
+        device_type:
+          type: string
+          description: Type or category of the device
+          maxLength: 50
+          nullable: true
+          example: "Switch"
+        site:
+          type: string
+          description: Physical location or site name
+          maxLength: 255
+          nullable: true
+          example: "Main Office"
+        installed_at:
+          type: string
+          format: date-time
+          description: Date and time when the item was installed
+          nullable: true
+          example: "2023-01-15T10:30:00Z"
+        warranty_end:
+          type: string
+          format: date-time
+          description: Date when the warranty expires
+          nullable: true
+          example: "2026-01-15T00:00:00Z"
+        notes:
+          type: string
+          description: Additional notes or comments
+          maxLength: 1000
+          nullable: true
+          example: "24-port gigabit switch with PoE+"
+        created_at:
+          type: string
+          format: date-time
+          description: Timestamp when the item was created
+          readOnly: true
+          example: "2023-01-10T09:00:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          description: Timestamp when the item was last updated
+          readOnly: true
+          example: "2023-01-15T10:30:00Z"
+      required:
+        - id
+        - asset_tag
+        - name
+        - created_at
+        - updated_at
+      additionalProperties: false
+
+    ItemInput:
+      type: object
+      description: Input schema for creating or updating inventory items
+      properties:
+        asset_tag:
+          type: string
+          description: Unique asset tag identifier within the organization
+          maxLength: 100
+          pattern: '^[A-Za-z0-9\-_]+$'
+          example: "SW-001"
+        name:
+          type: string
+          description: Human-readable name of the item
+          maxLength: 255
+          minLength: 1
+          example: "Access Switch"
+        manufacturer:
+          type: string
+          description: Manufacturer or brand name
+          maxLength: 100
+          nullable: true
+          example: "Cisco"
+        model:
+          type: string
+          description: Model number or identifier
+          maxLength: 100
+          nullable: true
+          example: "C2960X"
+        device_type:
+          type: string
+          description: Type or category of the device
+          maxLength: 50
+          nullable: true
+          example: "Switch"
+        site:
+          type: string
+          description: Physical location or site name
+          maxLength: 255
+          nullable: true
+          example: "Main Office"
+        installed_at:
+          type: string
+          format: date-time
+          description: Date and time when the item was installed
+          nullable: true
+          example: "2023-01-15T10:30:00Z"
+        warranty_end:
+          type: string
+          format: date-time
+          description: Date when the warranty expires
+          nullable: true
+          example: "2026-01-15T00:00:00Z"
+        notes:
+          type: string
+          description: Additional notes or comments
+          maxLength: 1000
+          nullable: true
+          example: "24-port gigabit switch with PoE+"
+      required:
+        - asset_tag
+        - name
+      additionalProperties: false
+
+    Site:
+      type: object
+      description: Physical site or location
+      properties:
+        id:
+          type: integer
+          description: Unique identifier for the site
+          readOnly: true
+          example: 123
+        name:
+          type: string
+          description: Site name
+          maxLength: 255
+          example: "Main Office"
+        location:
+          type: string
+          description: Physical address or location details
+          maxLength: 500
+          nullable: true
+          example: "123 Business St, City, State 12345"
+        notes:
+          type: string
+          description: Additional notes about the site
+          maxLength: 1000
+          nullable: true
+          example: "Primary headquarters location"
+        created_at:
+          type: string
+          format: date-time
+          description: Timestamp when the site was created
+          readOnly: true
+          example: "2023-01-01T00:00:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          description: Timestamp when the site was last updated
+          readOnly: true
+          example: "2023-01-01T00:00:00Z"
+      required:
+        - id
+        - name
+        - created_at
+        - updated_at
+      additionalProperties: false
+
+    SiteInput:
+      type: object
+      description: Input schema for creating or updating sites
+      properties:
+        name:
+          type: string
+          description: Site name
+          maxLength: 255
+          minLength: 1
+          example: "Main Office"
+        location:
+          type: string
+          description: Physical address or location details
+          maxLength: 500
+          nullable: true
+          example: "123 Business St, City, State 12345"
+        notes:
+          type: string
+          description: Additional notes about the site
+          maxLength: 1000
+          nullable: true
+          example: "Primary headquarters location"
+      required:
+        - name
+      additionalProperties: false
+
+    Vendor:
+      type: object
+      description: Vendor or supplier information
+      properties:
+        id:
+          type: integer
+          description: Unique identifier for the vendor
+          readOnly: true
+          example: 123
+        name:
+          type: string
+          description: Vendor name
+          maxLength: 255
+          example: "Tech Solutions Inc."
+        email:
+          type: string
+          format: email
+          description: Vendor contact email
+          maxLength: 255
+          nullable: true
+          example: "contact@techsolutions.com"
+        phone:
+          type: string
+          description: Vendor contact phone number
+          maxLength: 50
+          nullable: true
+          example: "+1-555-123-4567"
+        notes:
+          type: string
+          description: Additional notes about the vendor
+          maxLength: 1000
+          nullable: true
+          example: "Primary hardware supplier"
+        created_at:
+          type: string
+          format: date-time
+          description: Timestamp when the vendor was created
+          readOnly: true
+          example: "2023-01-01T00:00:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          description: Timestamp when the vendor was last updated
+          readOnly: true
+          example: "2023-01-01T00:00:00Z"
+      required:
+        - id
+        - name
+        - created_at
+        - updated_at
+      additionalProperties: false
+
+    VendorInput:
+      type: object
+      description: Input schema for creating or updating vendors
+      properties:
+        name:
+          type: string
+          description: Vendor name
+          maxLength: 255
+          minLength: 1
+          example: "Tech Solutions Inc."
+        email:
+          type: string
+          format: email
+          description: Vendor contact email
+          maxLength: 255
+          nullable: true
+          example: "contact@techsolutions.com"
+        phone:
+          type: string
+          description: Vendor contact phone number
+          maxLength: 50
+          nullable: true
+          pattern: '^[\+]?[0-9\-\(\)\s]+$'
+          example: "+1-555-123-4567"
+        notes:
+          type: string
+          description: Additional notes about the vendor
+          maxLength: 1000
+          nullable: true
+          example: "Primary hardware supplier"
+      required:
+        - name
+      additionalProperties: false
+
+    Project:
+      type: object
+      description: Project information
+      properties:
+        id:
+          type: integer
+          description: Unique identifier for the project
+          readOnly: true
+          example: 123
+        code:
+          type: string
+          description: Unique project code within the organization
+          maxLength: 50
+          example: "PROJ-001"
+        name:
+          type: string
+          description: Project name
+          maxLength: 255
+          example: "Network Upgrade Project"
+        description:
+          type: string
+          description: Project description
+          maxLength: 1000
+          nullable: true
+          example: "Upgrading network infrastructure across all sites"
+        created_at:
+          type: string
+          format: date-time
+          description: Timestamp when the project was created
+          readOnly: true
+          example: "2023-01-01T00:00:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          description: Timestamp when the project was last updated
+          readOnly: true
+          example: "2023-01-01T00:00:00Z"
+      required:
+        - id
+        - code
+        - name
+        - created_at
+        - updated_at
+      additionalProperties: false
+
+    ProjectInput:
+      type: object
+      description: Input schema for creating or updating projects
+      properties:
+        code:
+          type: string
+          description: Unique project code within the organization
+          maxLength: 50
+          minLength: 1
+          pattern: '^[A-Za-z0-9\-_]+$'
+          example: "PROJ-001"
+        name:
+          type: string
+          description: Project name
+          maxLength: 255
+          minLength: 1
+          example: "Network Upgrade Project"
+        description:
+          type: string
+          description: Project description
+          maxLength: 1000
+          nullable: true
+          example: "Upgrading network infrastructure across all sites"
+      required:
+        - code
+        - name
+      additionalProperties: false
+
+    # Asset Management Schemas
+    Asset:
+      type: object
+      description: Core asset record with hybrid model support
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: Unique identifier for the asset
+          readOnly: true
+          example: 123
+        org_id:
+          type: integer
+          format: int64
+          description: Organization ID (automatically set from JWT context)
+          readOnly: true
+          example: 1
+        site_id:
+          type: integer
+          format: int64
+          description: Site ID where the asset is located
+          example: 5
+        asset_type:
+          type: string
+          description: Type of asset (switch, firewall, ap, vlan, peplink, software, etc.)
+          maxLength: 50
+          example: "switch"
+        name:
+          type: string
+          description: Asset name or hostname
+          maxLength: 255
+          nullable: true
+          example: "Core-Switch-01"
+        vendor:
+          type: string
+          description: Vendor or manufacturer
+          maxLength: 100
+          nullable: true
+          example: "Cisco"
+        model:
+          type: string
+          description: Model number or identifier
+          maxLength: 100
+          nullable: true
+          example: "C2960X"
+        serial:
+          type: string
+          description: Serial number
+          maxLength: 100
+          nullable: true
+          example: "FCW1234ABCD"
+        mgmt_ip:
+          type: string
+          format: ipv4
+          description: Management IP address
+          nullable: true
+          example: "192.168.1.10"
+        status:
+          type: string
+          description: Asset status
+          maxLength: 50
+          nullable: true
+          example: "active"
+        notes:
+          type: string
+          description: Additional notes
+          maxLength: 1000
+          nullable: true
+          example: "Primary core switch"
+        extras:
+          type: object
+          description: Additional unstructured data as JSON
+          additionalProperties: true
+          example: {"rack_unit": 1, "power_consumption": "150W"}
+        created_at:
+          type: string
+          format: date-time
+          description: Creation timestamp
+          readOnly: true
+          example: "2023-01-01T00:00:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update timestamp
+          readOnly: true
+          example: "2023-01-01T00:00:00Z"
+      required:
+        - id
+        - org_id
+        - site_id
+        - asset_type
+        - extras
+        - created_at
+        - updated_at
+      additionalProperties: false
+
+    AssetInput:
+      type: object
+      description: Input schema for creating or updating assets
+      properties:
+        site_id:
+          type: integer
+          format: int64
+          description: Site ID where the asset is located
+          example: 5
+        asset_type:
+          type: string
+          description: Type of asset
+          maxLength: 50
+          example: "switch"
+        name:
+          type: string
+          description: Asset name or hostname
+          maxLength: 255
+          nullable: true
+          example: "Core-Switch-01"
+        vendor:
+          type: string
+          description: Vendor or manufacturer
+          maxLength: 100
+          nullable: true
+          example: "Cisco"
+        model:
+          type: string
+          description: Model number or identifier
+          maxLength: 100
+          nullable: true
+          example: "C2960X"
+        serial:
+          type: string
+          description: Serial number
+          maxLength: 100
+          nullable: true
+          example: "FCW1234ABCD"
+        mgmt_ip:
+          type: string
+          format: ipv4
+          description: Management IP address
+          nullable: true
+          example: "192.168.1.10"
+        status:
+          type: string
+          description: Asset status
+          maxLength: 50
+          nullable: true
+          example: "active"
+        notes:
+          type: string
+          description: Additional notes
+          maxLength: 1000
+          nullable: true
+          example: "Primary core switch"
+        extras:
+          type: object
+          description: Additional unstructured data as JSON
+          additionalProperties: true
+          nullable: true
+          example: {"rack_unit": 1, "power_consumption": "150W"}
+        switch:
+          $ref: '#/components/schemas/AssetSwitchInput'
+        vlan:
+          $ref: '#/components/schemas/AssetVLANInput'
+      required:
+        - site_id
+        - asset_type
+      additionalProperties: false
+
+    AssetSwitch:
+      type: object
+      description: Switch-specific asset attributes
+      properties:
+        asset_id:
+          type: integer
+          format: int64
+          description: Reference to the parent asset
+          readOnly: true
+          example: 123
+        ports_total:
+          type: integer
+          description: Total number of ports
+          nullable: true
+          example: 48
+        poe:
+          type: boolean
+          description: Power over Ethernet support
+          nullable: true
+          example: true
+        uplink_info:
+          type: string
+          description: Uplink connection information
+          maxLength: 255
+          nullable: true
+          example: "2x 10G SFP+"
+        firmware:
+          type: string
+          description: Firmware version
+          maxLength: 100
+          nullable: true
+          example: "15.2(4)S7"
+      required:
+        - asset_id
+      additionalProperties: false
+
+    AssetSwitchInput:
+      type: object
+      description: Input schema for switch-specific attributes
+      properties:
+        ports_total:
+          type: integer
+          description: Total number of ports
+          nullable: true
+          example: 48
+        poe:
+          type: boolean
+          description: Power over Ethernet support
+          nullable: true
+          example: true
+        uplink_info:
+          type: string
+          description: Uplink connection information
+          maxLength: 255
+          nullable: true
+          example: "2x 10G SFP+"
+        firmware:
+          type: string
+          description: Firmware version
+          maxLength: 100
+          nullable: true
+          example: "15.2(4)S7"
+      additionalProperties: false
+
+    AssetVLAN:
+      type: object
+      description: VLAN-specific asset attributes
+      properties:
+        asset_id:
+          type: integer
+          format: int64
+          description: Reference to the parent asset
+          readOnly: true
+          example: 123
+        vlan_id:
+          type: integer
+          description: VLAN ID number
+          example: 100
+        subnet:
+          type: string
+          description: Subnet in CIDR notation
+          nullable: true
+          example: "192.168.100.0/24"
+        gateway:
+          type: string
+          format: ipv4
+          description: Gateway IP address
+          nullable: true
+          example: "192.168.100.1"
+        purpose:
+          type: string
+          description: VLAN purpose or description
+          maxLength: 255
+          nullable: true
+          example: "Guest Network"
+      required:
+        - asset_id
+        - vlan_id
+      additionalProperties: false
+
+    AssetVLANInput:
+      type: object
+      description: Input schema for VLAN-specific attributes
+      properties:
+        vlan_id:
+          type: integer
+          description: VLAN ID number
+          example: 100
+        subnet:
+          type: string
+          description: Subnet in CIDR notation
+          nullable: true
+          example: "192.168.100.0/24"
+        gateway:
+          type: string
+          format: ipv4
+          description: Gateway IP address
+          nullable: true
+          example: "192.168.100.1"
+        purpose:
+          type: string
+          description: VLAN purpose or description
+          maxLength: 255
+          nullable: true
+          example: "Guest Network"
+      required:
+        - vlan_id
+      additionalProperties: false
+
+    AssetWithSubtypes:
+      type: object
+      description: Asset with optional subtype data
+      allOf:
+        - $ref: '#/components/schemas/Asset'
+        - type: object
+          properties:
+            switch:
+              $ref: '#/components/schemas/AssetSwitch'
+            vlan:
+              $ref: '#/components/schemas/AssetVLAN'
+          additionalProperties: false
+
+    SiteAssetCategory:
+      type: object
+      description: Dynamic site asset category with count
+      properties:
+        org_id:
+          type: integer
+          format: int64
+          description: Organization ID
+          readOnly: true
+          example: 1
+        site_id:
+          type: integer
+          format: int64
+          description: Site ID
+          readOnly: true
+          example: 5
+        asset_type:
+          type: string
+          description: Asset type
+          readOnly: true
+          example: "switch"
+        asset_count:
+          type: integer
+          description: Number of assets of this type at the site
+          readOnly: true
+          example: 12
+      required:
+        - org_id
+        - site_id
+        - asset_type
+        - asset_count
+      additionalProperties: false
+
+    # Import Schemas
+    RowError:
+      type: object
+      description: Error that occurred during row processing
+      properties:
+        sheet:
+          type: string
+          description: Name of the Excel sheet where the error occurred
+          example: "Equipment"
+        row:
+          type: integer
+          description: Row number where the error occurred (1-based)
+          example: 5
+        message:
+          type: string
+          description: Error message describing what went wrong
+          example: "Invalid IP address: 192.168.1.999"
+      required:
+        - sheet
+        - row
+        - message
+      additionalProperties: false
+
+    SheetSummary:
+      type: object
+      description: Import statistics for a single Excel sheet
+      properties:
+        name:
+          type: string
+          description: Name of the Excel sheet
+          example: "Equipment"
+        inserted:
+          type: integer
+          description: Number of new assets created
+          example: 15
+        updated:
+          type: integer
+          description: Number of existing assets updated
+          example: 3
+        skipped:
+          type: integer
+          description: Number of rows skipped (empty or invalid)
+          example: 2
+        errors:
+          type: integer
+          description: Number of rows with errors
+          example: 0
+        error_samples:
+          type: array
+          description: Sample error details (limited to first few errors)
+          items:
+            $ref: '#/components/schemas/RowError'
+          maxItems: 10
+      required:
+        - name
+        - inserted
+        - updated
+        - skipped
+        - errors
+      additionalProperties: false
+
+    ImportSummary:
+      type: object
+      description: Overall import operation summary
+      properties:
+        inserted:
+          type: integer
+          description: Total number of new assets created across all sheets
+          example: 15
+        updated:
+          type: integer
+          description: Total number of existing assets updated across all sheets
+          example: 3
+        skipped:
+          type: integer
+          description: Total number of rows skipped across all sheets
+          example: 2
+        errors:
+          type: integer
+          description: Total number of errors across all sheets
+          example: 0
+        sheets:
+          type: array
+          description: Import statistics for each processed sheet
+          items:
+            $ref: '#/components/schemas/SheetSummary'
+        dry_run:
+          type: boolean
+          description: Whether this was a dry run (no actual changes made)
+          example: false
+      required:
+        - inserted
+        - updated
+        - skipped
+        - errors
+        - sheets
+        - dry_run
+      additionalProperties: false
+
+    # Response Schemas
+    ListResponse:
+      type: object
+      description: Standard paginated list response envelope
+      properties:
+        data:
+          type: array
+          description: Array of items for the current page
+          items:
+            type: object
+        page:
+          $ref: '#/components/schemas/PageInfo'
+      required:
+        - data
+        - page
+      additionalProperties: false
+
+    PageInfo:
+      type: object
+      description: Pagination metadata
+      properties:
+        limit:
+          type: integer
+          description: Maximum number of items per page
+          minimum: 1
+          maximum: 200
+          example: 50
+        offset:
+          type: integer
+          description: Number of items skipped
+          minimum: 0
+          example: 0
+        total:
+          type: integer
+          description: Total number of items matching the filter
+          minimum: 0
+          example: 150
+      required:
+        - limit
+        - offset
+        - total
+      additionalProperties: false
+
+    ErrorResponse:
+      type: object
+      description: Standard error response format
+      properties:
+        error:
+          type: string
+          description: Human-readable error message
+          example: "Invalid request parameters"
+        code:
+          type: string
+          description: Machine-readable error code
+          example: "VALIDATION_ERROR"
+        details:
+          type: object
+          description: Additional error details (optional)
+          nullable: true
+          additionalProperties: true
+      required:
+        - error
+        - code
+      additionalProperties: false
+
+    # Authentication Schemas
+    AuthClaims:
+      type: object
+      description: JWT token claims structure
+      properties:
+        sub:
+          type: string
+          description: Subject (User ID)
+          example: "123"
+        org_id:
+          type: integer
+          description: Organization ID
+          example: 1
+        roles:
+          type: array
+          description: User roles
+          items:
+            type: string
+            enum: [org_admin, project_admin]
+          example: ["org_admin"]
+        iss:
+          type: string
+          description: Issuer
+          example: "era-inventory"
+        aud:
+          type: string
+          description: Audience
+          example: "era-inventory-api"
+        exp:
+          type: integer
+          description: Expiration timestamp
+          example: 1640995200
+        iat:
+          type: integer
+          description: Issued at timestamp
+          example: 1640908800
+        nbf:
+          type: integer
+          description: Not before timestamp
+          example: 1640908800
+      required:
+        - sub
+        - org_id
+        - roles
+        - iss
+        - aud
+        - exp
+        - iat
+        - nbf
+      additionalProperties: false
+
+  responses:
+    BadRequest:
+      description: Bad Request - Invalid request parameters or body
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            validation_error:
+              summary: Validation error
+              value:
+                error: "Validation failed: name is required"
+                code: "VALIDATION_ERROR"
+            invalid_json:
+              summary: Invalid JSON
+              value:
+                error: "Invalid JSON in request body"
+                code: "INVALID_JSON"
+            invalid_date:
+              summary: Invalid date format
+              value:
+                error: "Invalid date format for installed_at"
+                code: "INVALID_DATE_FORMAT"
+
+    Unauthorized:
+      description: Unauthorized - Authentication required or invalid
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            missing_auth_header:
+              summary: Missing Authorization header
+              value:
+                error: "Authorization header required"
+                code: "MISSING_AUTH_HEADER"
+            invalid_auth_format:
+              summary: Invalid authorization header format
+              value:
+                error: "Invalid authorization header format. Expected: Bearer <token>"
+                code: "INVALID_AUTH_FORMAT"
+            missing_token:
+              summary: Missing token
+              value:
+                error: "Token is required"
+                code: "MISSING_TOKEN"
+            invalid_token_format:
+              summary: Invalid token format
+              value:
+                error: "Invalid token format: invalid JWT token format"
+                code: "INVALID_TOKEN_FORMAT"
+            token_expired:
+              summary: Expired token
+              value:
+                error: "Token has expired"
+                code: "TOKEN_EXPIRED"
+            invalid_signing_method:
+              summary: Invalid signing method
+              value:
+                error: "Invalid token signing method"
+                code: "INVALID_SIGNING_METHOD"
+            malformed_token:
+              summary: Malformed token
+              value:
+                error: "Token is malformed"
+                code: "MALFORMED_TOKEN"
+            invalid_user_id:
+              summary: Invalid user ID in token
+              value:
+                error: "Invalid user ID in token"
+                code: "INVALID_USER_ID"
+            invalid_org_id:
+              summary: Invalid organization ID in token
+              value:
+                error: "Invalid organization ID in token"
+                code: "INVALID_ORG_ID"
+            no_roles:
+              summary: No roles assigned
+              value:
+                error: "No roles assigned to user"
+                code: "NO_ROLES"
+            authentication_required:
+              summary: Authentication context missing
+              value:
+                error: "Authentication required"
+                code: "AUTHENTICATION_REQUIRED"
+
+    Forbidden:
+      description: Forbidden - Insufficient permissions
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            insufficient_permissions:
+              summary: Insufficient permissions
+              value:
+                error: "Insufficient permissions"
+                code: "INSUFFICIENT_PERMISSIONS"
+            org_admin_required:
+              summary: Organization admin role required
+              value:
+                error: "Organization admin role required for this operation"
+                code: "ORG_ADMIN_REQUIRED"
+            project_admin_required:
+              summary: Project admin role required
+              value:
+                error: "Project admin or organization admin role required"
+                code: "PROJECT_ADMIN_REQUIRED"
+
+    NotFound:
+      description: Not Found - Resource does not exist or user lacks access
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            item_not_found:
+              summary: Item not found
+              value:
+                error: "Item not found"
+                code: "ITEM_NOT_FOUND"
+            site_not_found:
+              summary: Site not found
+              value:
+                error: "Site not found"
+                code: "SITE_NOT_FOUND"
+            vendor_not_found:
+              summary: Vendor not found
+              value:
+                error: "Vendor not found"
+                code: "VENDOR_NOT_FOUND"
+            project_not_found:
+              summary: Project not found
+              value:
+                error: "Project not found"
+                code: "PROJECT_NOT_FOUND"
+
+    InternalServerError:
+      description: Internal Server Error - Unexpected server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            database_error:
+              summary: Database error
+              value:
+                error: "Internal server error"
+                code: "DATABASE_ERROR"
+            server_error:
+              summary: Generic server error
+              value:
+                error: "Internal server error"
+                code: "INTERNAL_ERROR"
+
+tags:
+  - name: System
+    description: |
+      System health and documentation endpoints.
+      These endpoints do not require authentication.
+  - name: Items
+    description: |
+      Inventory item management operations.
+      
+      ### Permissions
+      - **Read**: All authenticated users
+      - **Create/Update**: org_admin or project_admin roles
+      - **Delete**: org_admin role only
+  - name: Sites
+    description: |
+      Site and location management operations.
+      
+      ### Permissions
+      - **Read**: All authenticated users
+      - **Create/Update/Delete**: org_admin role only
+  - name: Vendors
+    description: |
+      Vendor and supplier management operations.
+      
+      ### Permissions
+      - **Read**: All authenticated users
+      - **Create/Update/Delete**: org_admin role only
+  - name: Projects
+    description: |
+      Project management operations.
+      
+      ### Permissions
+      - **Read**: All authenticated users
+      - **Create/Update/Delete**: org_admin role only
+
+# API Usage Examples
+x-examples:
+  authentication:
+    summary: Authentication Flow
+    description: |
+      ### 1. Generate JWT Token
+      ```bash
+      # Using the jwtgen utility
+      ./jwtgen -user 1 -org 1 -roles "org_admin"
+      ```
+      
+      ### 2. Use Token in Requests
+      ```bash
+      curl -H "Authorization: Bearer <token>" \
+           http://localhost:8080/items
+      ```
+      
+      ### 3. Handle Token Expiration
+      Check the `X-Token-Expires-At` header and refresh tokens before expiry.
+
+  crud_operations:
+    summary: CRUD Operations Example
+    description: |
+      ### Create Item
+      ```bash
+      curl -X POST http://localhost:8080/items \
+        -H "Authorization: Bearer <token>" \
+        -H "Content-Type: application/json" \
+        -d '{
+          "asset_tag": "SW-001",
+          "name": "Access Switch",
+          "manufacturer": "Cisco",
+          "model": "C2960X"
+        }'
+      ```
+      
+      ### List Items with Pagination
+      ```bash
+      curl "http://localhost:8080/items?limit=10&offset=0&sort=name" \
+        -H "Authorization: Bearer <token>"
+      ```
+      
+      ### Update Item
+      ```bash
+      curl -X PUT http://localhost:8080/items/123 \
+        -H "Authorization: Bearer <token>" \
+        -H "Content-Type: application/json" \
+        -d '{"name": "Updated Switch Name"}'
+      ```
+      
+      ### Delete Item
+      ```bash
+      curl -X DELETE http://localhost:8080/items/123 \
+        -H "Authorization: Bearer <token>"
+      ```
+
+  error_handling:
+    summary: Error Handling Examples
+    description: |
+      ### Authentication Errors
+      ```json
+      {
+        "error": "Token has expired",
+        "code": "TOKEN_EXPIRED"
+      }
+      ```
+      
+      ### Validation Errors
+      ```json
+      {
+        "error": "Validation failed: name is required",
+        "code": "VALIDATION_ERROR"
+      }
+      ```
+      
+      ### Permission Errors
+      ```json
+      {
+        "error": "Insufficient permissions",
+        "code": "INSUFFICIENT_PERMISSIONS"
+      }
+      ```
+
+  search_and_filtering:
+    summary: Search and Filtering Examples
+    description: |
+      ### Text Search
+      ```bash
+      # Search items by name or asset_tag
+      curl "http://localhost:8080/items?q=switch" \
+        -H "Authorization: Bearer <token>"
+      ```
+      
+      ### Sorting
+      ```bash
+      # Sort by name ascending
+      curl "http://localhost:8080/items?sort=name" \
+        -H "Authorization: Bearer <token>"
+      
+      # Sort by creation date descending
+      curl "http://localhost:8080/items?sort=-created_at" \
+        -H "Authorization: Bearer <token>"
+      ```
+      
+      ### Pagination
+      ```bash
+      # Get second page (items 51-100)
+      curl "http://localhost:8080/items?limit=50&offset=50" \
+        -H "Authorization: Bearer <token>"
+      ```

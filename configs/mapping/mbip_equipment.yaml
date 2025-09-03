@@ -1,0 +1,147 @@
+version: 1
+default_org_fields:
+  status_default: "active"
+
+sheets:
+  VLAN:
+    asset_type: "vlan"
+    natural_key: ["vlan_id"]
+    columns:
+      "VLAN ID": { field: "vlan_id",   type: "int" }
+      "VLAN NAME": { field: "name",    type: "string" }
+      "NETWORK": { field: "network",   type: "ip" }
+      "CIDR":    { field: "cidr",      type: "int" }
+      "GATEWAY": { field: "gateway",   type: "ip" }
+      "DHCP":    { field: "dhcp",      type: "bool" }
+      "STATUS":  { field: "status",    type: "string" }
+    computed:
+      subnet: { fn: "cidr_from", args: ["network", "cidr"] }
+    subtype: "asset_vlans"
+    subtype_fields:
+      vlan_id: "vlan_id"
+      subnet: "subnet"
+      gateway: "gateway"
+      purpose: "name"
+
+  SWITCH:
+    asset_type: "switch"
+    natural_key: ["serial","name","mgmt_ip"]   # use first present
+    aliases:
+      name:    ["HOSTNAME","DEVICE NAME","NAME"]
+      serial:  ["SERIAL","SERIAL NUMBER"]
+      mgmt_ip: ["MGMT IP","IP","IP ADDRESS","MANAGEMENT IP","INTERNAL IP"]
+      vendor:  ["VENDOR","BRAND","MAKE"]
+      model:   ["MODEL","PLATFORM"]
+      poe:     ["POE","POWER OVER ETHERNET"]
+      ports:   ["PORTS","TOTAL PORTS","PORTS TOTAL"]
+      firmware:["FIRMWARE","VERSION"]
+    columns:
+      name:     { field: "name",       type: "string" }
+      vendor:   { field: "vendor",     type: "string" }
+      model:    { field: "model",      type: "string" }
+      serial:   { field: "serial",     type: "string" }
+      mgmt_ip:  { field: "mgmt_ip",    type: "ip" }
+      ports:    { field: "ports_total",type: "int?" }
+      poe:      { field: "poe",        type: "bool?" }
+      firmware: { field: "firmware",   type: "string?" }
+    subtype: "asset_switches"
+    subtype_fields:
+      ports_total: "ports_total"
+      poe: "poe"
+      firmware: "firmware"
+
+  ESET:
+    asset_type: "software"
+    natural_key: ["name","url"]
+    columns:
+      "DESCRIPTION": { field: "name", type: "string" }
+      "URL":         { field: "url",  type: "string" }
+      "USERNAME":    { field: "username", type: "string?" }
+      "PASSWORD":    { field: "password", type: "string?" }
+    to_asset:
+      vendor: "ESET"
+      model: "Endpoint"
+
+  PEPLINK:
+    asset_type: "peplink"
+    natural_key: ["serial","name"]
+    columns:
+      "DEVICE NAME": { field: "name", type: "string" }
+      "SERIAL":      { field: "serial", type: "string" }
+      "MODEL":       { field: "model", type: "string" }
+      "IP ADDRESS":  { field: "mgmt_ip", type: "ip" }
+      "STATUS":      { field: "status", type: "string" }
+    to_asset:
+      vendor: "Peplink"
+
+  FIREWALL:
+    asset_type: "firewall"
+    natural_key: ["serial","name"]
+    columns:
+      "DEVICE NAME": { field: "name", type: "string" }
+      "SERIAL":      { field: "serial", type: "string" }
+      "MODEL":       { field: "model", type: "string" }
+      "IP ADDRESS":  { field: "mgmt_ip", type: "ip" }
+      "STATUS":      { field: "status", type: "string" }
+    to_asset:
+      vendor: "Fortinet"
+
+  ACCESS POINT:
+    asset_type: "ap"
+    natural_key: ["serial","name"]
+    columns:
+      "DEVICE NAME": { field: "name", type: "string" }
+      "SERIAL":      { field: "serial", type: "string" }
+      "MODEL":       { field: "model", type: "string" }
+      "IP ADDRESS":  { field: "mgmt_ip", type: "ip" }
+      "STATUS":      { field: "status", type: "string" }
+    to_asset:
+      vendor: "Ubiquiti"
+
+  WIRELESS CONTROLLER:
+    asset_type: "wireless_controller"
+    natural_key: ["serial","name"]
+    columns:
+      "DEVICE NAME": { field: "name", type: "string" }
+      "SERIAL":      { field: "serial", type: "string" }
+      "MODEL":       { field: "model", type: "string" }
+      "IP ADDRESS":  { field: "mgmt_ip", type: "ip" }
+      "STATUS":      { field: "status", type: "string" }
+    to_asset:
+      vendor: "Ubiquiti"
+
+  VDI:
+    asset_type: "vdi"
+    natural_key: ["name"]
+    columns:
+      "DESCRIPTION": { field: "name", type: "string" }
+      "URL":         { field: "url",  type: "string" }
+      "USERNAME":    { field: "username", type: "string?" }
+      "PASSWORD":    { field: "password", type: "string?" }
+    to_asset:
+      vendor: "VMware"
+      model: "Horizon"
+
+  HCI:
+    asset_type: "hci"
+    natural_key: ["serial","name"]
+    columns:
+      "DEVICE NAME": { field: "name", type: "string" }
+      "SERIAL":      { field: "serial", type: "string" }
+      "MODEL":       { field: "model", type: "string" }
+      "IP ADDRESS":  { field: "mgmt_ip", type: "ip" }
+      "STATUS":      { field: "status", type: "string" }
+    to_asset:
+      vendor: "Nutanix"
+
+  SOLARWIND:
+    asset_type: "software"
+    natural_key: ["name","url"]
+    columns:
+      "DESCRIPTION": { field: "name", type: "string" }
+      "URL":         { field: "url",  type: "string" }
+      "USERNAME":    { field: "username", type: "string?" }
+      "PASSWORD":    { field: "password", type: "string?" }
+    to_asset:
+      vendor: "SolarWinds"
+      model: "NPM"

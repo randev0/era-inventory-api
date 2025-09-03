@@ -1,0 +1,142 @@
+# Multi-Tenant User Management System Test
+
+### Variables
+@baseURL = http://localhost:8080
+@superAdminEmail = superadmin@maintenant.com
+@clientAdminEmail = admin@clienta.com
+@password = Password123!
+
+### 1. Login as Super Admin (Main Tenant)
+POST {{baseURL}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{superAdminEmail}}",
+  "password": "{{password}}"
+}
+
+### Store the token for subsequent requests
+@superAdminToken = {{login.response.body.$.token}}
+
+### 2. Login as Client Admin (Client Tenant)
+POST {{baseURL}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{clientAdminEmail}}",
+  "password": "{{password}}"
+}
+
+### Store the client token
+@clientAdminToken = {{login.response.body.$.token}}
+
+### 3. Super Admin - List ALL organizations (should work)
+GET {{baseURL}}/organizations
+Authorization: Bearer {{superAdminToken}}
+
+### 4. Client Admin - Try to list organizations (should fail)
+GET {{baseURL}}/organizations
+Authorization: Bearer {{clientAdminToken}}
+
+### 5. Super Admin - List ALL users across organizations
+GET {{baseURL}}/users
+Authorization: Bearer {{superAdminToken}}
+
+### 6. Client Admin - List users (should only see their own org)
+GET {{baseURL}}/users
+Authorization: Bearer {{clientAdminToken}}
+
+### 7. Super Admin - Create user in Client org (should work)
+POST {{baseURL}}/users
+Authorization: Bearer {{superAdminToken}}
+Content-Type: application/json
+
+{
+  "email": "newuser@clienta.com",
+  "password": "NewPassword123!",
+  "first_name": "New",
+  "last_name": "User",
+  "org_id": 2,
+  "roles": ["project_admin"]
+}
+
+### 8. Client Admin - Try to create user with different org_id (should fail/ignore)
+POST {{baseURL}}/users
+Authorization: Bearer {{clientAdminToken}}
+Content-Type: application/json
+
+{
+  "email": "another@clienta.com", 
+  "password": "AnotherPassword123!",
+  "first_name": "Another",
+  "last_name": "User",
+  "org_id": 1,
+  "roles": ["viewer"]
+}
+
+### 9. Super Admin - Create new organization
+POST {{baseURL}}/organizations
+Authorization: Bearer {{superAdminToken}}
+Content-Type: application/json
+
+{
+  "name": "Client Company B"
+}
+
+### 10. Super Admin - Create user in new organization
+POST {{baseURL}}/users
+Authorization: Bearer {{superAdminToken}}
+Content-Type: application/json
+
+{
+  "email": "admin@clientb.com",
+  "password": "AdminPassword123!",
+  "first_name": "Client B",
+  "last_name": "Admin",
+  "org_id": 3,
+  "roles": ["org_admin"]
+}
+
+### 11. Super Admin - List users with org filter
+GET {{baseURL}}/users?org_id=2
+Authorization: Bearer {{superAdminToken}}
+
+### 12. Get user profile (self-service)
+GET {{baseURL}}/auth/profile
+Authorization: Bearer {{clientAdminToken}}
+
+### 13. Update profile (self-service)
+PUT {{baseURL}}/auth/profile
+Authorization: Bearer {{clientAdminToken}}
+Content-Type: application/json
+
+{
+  "first_name": "Updated Client",
+  "last_name": "Admin"
+}
+
+### 14. Change password (self-service)
+PUT {{baseURL}}/auth/change-password
+Authorization: Bearer {{clientAdminToken}}
+Content-Type: application/json
+
+{
+  "current_password": "{{password}}",
+  "new_password": "NewClientPassword123!"
+}
+
+### 15. Client Admin - Try to access different org's users (should fail)
+GET {{baseURL}}/users/1
+Authorization: Bearer {{clientAdminToken}}
+
+### 16. Super Admin - Get organization stats
+GET {{baseURL}}/organizations/2/stats
+Authorization: Bearer {{superAdminToken}}
+
+### 17. Test main tenant inventory access (should see all)
+GET {{baseURL}}/items
+Authorization: Bearer {{superAdminToken}}
+
+### 18. Test client tenant inventory access (should see only their data)
+GET {{baseURL}}/items
+Authorization: Bearer {{clientAdminToken}}

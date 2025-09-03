@@ -1,0 +1,10 @@
+# Sample Excel Data for Testing
+# This represents the content that would be in an Excel file
+
+Sheet: Equipment
+Headers: AssetType, Name, Vendor, Model, Serial, MgmtIP, Status, Notes
+Row 1: switch, Core-Switch-01, Cisco, C2960X, FCW1234ABCD, 192.168.1.10, active, Main core switch
+Row 2: switch, Access-Switch-02, Cisco, C2960X, FCW5678EFGH, 192.168.1.11, active, Access switch
+Row 3: firewall, Firewall-01, Fortinet, FG-60E, FGT123456, 192.168.1.1, active, Main firewall
+
+# This file is for reference only - actual tests would use a real .xlsx file
