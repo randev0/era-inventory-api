@@ -217,6 +217,20 @@ func (s *Server) mountProtectedRoutes(r chi.Router) {
 	r.Put("/projects/{id}", auth.MustRole("org_admin")(http.HandlerFunc(s.updateProject)).(http.HandlerFunc))
 	r.Delete("/projects/{id}", auth.MustRole("org_admin")(http.HandlerFunc(s.deleteProject)).(http.HandlerFunc))
 
+	// Assets - require project_admin/org_admin for write operations
+	r.Get("/assets", s.listAssets)
+	r.Get("/assets/{id}", s.getAsset)
+	r.Post("/assets", auth.MustRole("org_admin", "project_admin")(http.HandlerFunc(s.createAsset)).(http.HandlerFunc))
+	r.Put("/assets/{id}", auth.MustRole("org_admin", "project_admin")(http.HandlerFunc(s.updateAsset)).(http.HandlerFunc))
+	r.Delete("/assets/{id}", auth.MustRole("org_admin")(http.HandlerFunc(s.deleteAsset)).(http.HandlerFunc))
+
+	// Asset subtypes
+	r.Get("/switches", s.listSwitches)
+	r.Get("/vlans", s.listVLANs)
+
+	// Site asset categories
+	r.Get("/sites/{id}/asset-categories", s.getSiteAssetCategories)
+
 	// User management - org_admin only, with multi-tenant logic
 	r.Post("/users", auth.MustRole("org_admin")(http.HandlerFunc(s.createUser)).(http.HandlerFunc))
 	r.Get("/users", auth.MustRole("org_admin")(http.HandlerFunc(s.listUsers)).(http.HandlerFunc))

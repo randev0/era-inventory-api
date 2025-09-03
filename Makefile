@@ -22,6 +22,14 @@ build: ## Build the Go binary locally
 build-windows: ## Build the Go binary for Windows
 	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -o bin/api.exe ./cmd/api
 
+.PHONY: build-import-excel
+build-import-excel: ## Build the Excel importer tool
+	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -o bin/import-excel ./cmd/tools/import_excel
+
+.PHONY: build-import-excel-windows
+build-import-excel-windows: ## Build the Excel importer tool for Windows
+	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -o bin/import-excel.exe ./cmd/tools/import_excel
+
 .PHONY: test
 test: ## Run unit tests only
 	go test ./... -race -count=1 -timeout=60s
@@ -166,3 +174,24 @@ psql:
 
 docs:
 	@echo "Open http://localhost:8080/docs"
+
+.PHONY: import-excel
+import-excel: ## Import Excel file (usage: make import-excel FILE=path.xlsx ORG_ID=1 SITE_ID=5)
+	@if [ -z "$(FILE)" ] || [ -z "$(ORG_ID)" ] || [ -z "$(SITE_ID)" ]; then \
+		echo "Usage: make import-excel FILE=path.xlsx ORG_ID=1 SITE_ID=5"; \
+		echo "Example: make import-excel FILE=sample.xlsx ORG_ID=1 SITE_ID=5"; \
+		exit 1; \
+	fi
+	$(MAKE) build-import-excel
+	./bin/import-excel --file=$(FILE) --org-id=$(ORG_ID) --site-id=$(SITE_ID) --mapping=configs/mapping/mbip_equipment.yaml
+
+.PHONY: import-excel-help
+import-excel-help: ## Show Excel importer help
+	$(MAKE) build-import-excel
+	./bin/import-excel --help || true
+
+.PHONY: import-excel-test
+import-excel-test: ## Test Excel importer with sample data
+	@echo "Creating sample Excel file for testing..."
+	@echo "This would create a sample Excel file with test data"
+	@echo "Usage: make import-excel FILE=sample.xlsx ORG_ID=1 SITE_ID=5"

@@ -1017,6 +1017,451 @@ paths:
         '500':
           $ref: '#/components/responses/InternalServerError'
 
+  # Asset Management Endpoints
+  /assets:
+    get:
+      summary: List Assets
+      description: |
+        Retrieve a paginated list of assets for the authenticated user's organization.
+        
+        ### Features
+        - **Pagination**: Use `limit` and `offset` parameters (limit capped at 100)
+        - **Search**: Use `q` parameter to search by name
+        - **Filtering**: Use `site_id` and `type` parameters
+        - **Sorting**: Use `sort` parameter (e.g., `name`, `-created_at`)
+        - **Organization Isolation**: Only returns assets from user's organization
+        
+        ### Filter Examples
+        - `?site_id=5` - Filter by site
+        - `?type=switch` - Filter by asset type
+        - `?q=core` - Search by name
+        - `?sort=name&limit=25` - Sort by name, limit to 25 results
+      tags: [Assets]
+      parameters:
+        - name: limit
+          in: query
+          description: Maximum number of assets to return (capped at 100)
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+        - $ref: '#/components/parameters/OffsetParam'
+        - $ref: '#/components/parameters/SearchParam'
+        - name: sort
+          in: query
+          description: Sort field and direction
+          schema:
+            type: string
+            enum: [id, name, asset_type, vendor, created_at, updated_at, -id, -name, -asset_type, -vendor, -created_at, -updated_at]
+        - name: site_id
+          in: query
+          description: Filter by site ID
+          schema:
+            type: integer
+            format: int64
+        - name: type
+          in: query
+          description: Filter by asset type
+          schema:
+            type: string
+            example: "switch"
+      responses:
+        '200':
+          description: List of assets
+          headers:
+            X-Total-Count:
+              description: Total number of assets matching the filter
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ListResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Asset'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    post:
+      summary: Create Asset
+      description: |
+        Create a new asset in the authenticated user's organization.
+        
+        ### Required Permissions
+        - `org_admin` or `project_admin` role
+        
+        ### Features
+        - **Hybrid Model**: Supports core asset data plus optional subtype data
+        - **Subtypes**: Include `switch` or `vlan` data for structured querying
+        - **Extras**: Store additional unstructured data in `extras` JSON field
+        - **Validation**: Serial numbers must be unique per site and asset type
+      tags: [Assets]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssetInput'
+            examples:
+              switch_asset:
+                summary: Create switch asset
+                value:
+                  site_id: 5
+                  asset_type: "switch"
+                  name: "Core-Switch-01"
+                  vendor: "Cisco"
+                  model: "C2960X"
+                  serial: "FCW1234ABCD"
+                  mgmt_ip: "192.168.1.10"
+                  status: "active"
+                  notes: "Primary core switch"
+                  extras:
+                    rack_unit: 1
+                    power_consumption: "150W"
+                  switch:
+                    ports_total: 48
+                    poe: true
+                    uplink_info: "2x 10G SFP+"
+                    firmware: "15.2(4)S7"
+              vlan_asset:
+                summary: Create VLAN asset
+                value:
+                  site_id: 5
+                  asset_type: "vlan"
+                  name: "Guest Network"
+                  status: "active"
+                  vlan:
+                    vlan_id: 100
+                    subnet: "192.168.100.0/24"
+                    gateway: "192.168.100.1"
+                    purpose: "Guest Network"
+      responses:
+        '201':
+          description: Asset created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Asset'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          description: Asset with this serial already exists for this site and type
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /assets/{id}:
+    get:
+      summary: Get Asset
+      description: |
+        Retrieve a specific asset by ID.
+        
+        ### Features
+        - **Organization Isolation**: Only returns assets from user's organization
+        - **Complete Data**: Returns full asset details including extras
+      tags: [Assets]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Asset ID
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Asset details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Asset'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    put:
+      summary: Update Asset
+      description: |
+        Update an existing asset.
+        
+        ### Required Permissions
+        - `org_admin` or `project_admin` role
+        
+        ### Features
+        - **Partial Updates**: Only provided fields are updated
+        - **Subtype Updates**: Can update switch or VLAN subtype data
+        - **Validation**: Serial numbers must be unique per site and asset type
+      tags: [Assets]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Asset ID
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssetInput'
+      responses:
+        '200':
+          description: Asset updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Asset'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Asset with this serial already exists for this site and type
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    delete:
+      summary: Delete Asset
+      description: |
+        Delete an asset and all its subtype data.
+        
+        ### Required Permissions
+        - `org_admin` role
+      tags: [Assets]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Asset ID
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '204':
+          description: Asset deleted successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /switches:
+    get:
+      summary: List Switches
+      description: |
+        Retrieve a paginated list of switch assets with subtype data.
+        
+        ### Features
+        - **Subtype Data**: Includes switch-specific attributes (ports, POE, firmware)
+        - **Pagination**: Use `limit` and `offset` parameters (limit capped at 100)
+        - **Search**: Use `q` parameter to search by name
+        - **Filtering**: Use `site_id` parameter
+        - **Sorting**: Use `sort` parameter
+        - **Organization Isolation**: Only returns switches from user's organization
+      tags: [Assets]
+      parameters:
+        - name: limit
+          in: query
+          description: Maximum number of switches to return (capped at 100)
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+        - $ref: '#/components/parameters/OffsetParam'
+        - $ref: '#/components/parameters/SearchParam'
+        - name: sort
+          in: query
+          description: Sort field and direction
+          schema:
+            type: string
+            enum: [id, name, vendor, created_at, updated_at, -id, -name, -vendor, -created_at, -updated_at]
+        - name: site_id
+          in: query
+          description: Filter by site ID
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: List of switches with subtype data
+          headers:
+            X-Total-Count:
+              description: Total number of switches matching the filter
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ListResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/AssetWithSubtypes'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /vlans:
+    get:
+      summary: List VLANs
+      description: |
+        Retrieve a paginated list of VLAN assets with subtype data.
+        
+        ### Features
+        - **Subtype Data**: Includes VLAN-specific attributes (VLAN ID, subnet, gateway)
+        - **Pagination**: Use `limit` and `offset` parameters (limit capped at 100)
+        - **Search**: Use `q` parameter to search by name
+        - **Filtering**: Use `site_id` parameter
+        - **Sorting**: Use `sort` parameter
+        - **Organization Isolation**: Only returns VLANs from user's organization
+      tags: [Assets]
+      parameters:
+        - name: limit
+          in: query
+          description: Maximum number of VLANs to return (capped at 100)
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+        - $ref: '#/components/parameters/OffsetParam'
+        - $ref: '#/components/parameters/SearchParam'
+        - name: sort
+          in: query
+          description: Sort field and direction
+          schema:
+            type: string
+            enum: [id, name, vlan_id, created_at, updated_at, -id, -name, -vlan_id, -created_at, -updated_at]
+        - name: site_id
+          in: query
+          description: Filter by site ID
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: List of VLANs with subtype data
+          headers:
+            X-Total-Count:
+              description: Total number of VLANs matching the filter
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ListResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/AssetWithSubtypes'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /sites/{id}/asset-categories:
+    get:
+      summary: Get Site Asset Categories
+      description: |
+        Retrieve dynamic asset categories for a specific site with counts.
+        
+        ### Features
+        - **Dynamic Categories**: Shows only asset types that exist at the site
+        - **Real-time Counts**: Counts are automatically maintained by database triggers
+        - **Organization Isolation**: Only returns categories from user's organization
+        
+        ### Use Cases
+        - **UI Filtering**: Show only relevant asset types in site-specific views
+        - **Dashboard**: Display asset type distribution per site
+        - **Reporting**: Generate site-specific asset reports
+      tags: [Assets]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Site ID
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: List of asset categories for the site
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SiteAssetCategory'
+              examples:
+                categories:
+                  summary: Site asset categories
+                  value:
+                    - org_id: 1
+                      site_id: 5
+                      asset_type: "switch"
+                      asset_count: 12
+                    - org_id: 1
+                      site_id: 5
+                      asset_type: "firewall"
+                      asset_count: 2
+                    - org_id: 1
+                      site_id: 5
+                      asset_type: "vlan"
+                      asset_count: 8
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
 components:
   securitySchemes:
     bearerAuth:
@@ -1520,6 +1965,348 @@ components:
       required:
         - code
         - name
+      additionalProperties: false
+
+    # Asset Management Schemas
+    Asset:
+      type: object
+      description: Core asset record with hybrid model support
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: Unique identifier for the asset
+          readOnly: true
+          example: 123
+        org_id:
+          type: integer
+          format: int64
+          description: Organization ID (automatically set from JWT context)
+          readOnly: true
+          example: 1
+        site_id:
+          type: integer
+          format: int64
+          description: Site ID where the asset is located
+          example: 5
+        asset_type:
+          type: string
+          description: Type of asset (switch, firewall, ap, vlan, peplink, software, etc.)
+          maxLength: 50
+          example: "switch"
+        name:
+          type: string
+          description: Asset name or hostname
+          maxLength: 255
+          nullable: true
+          example: "Core-Switch-01"
+        vendor:
+          type: string
+          description: Vendor or manufacturer
+          maxLength: 100
+          nullable: true
+          example: "Cisco"
+        model:
+          type: string
+          description: Model number or identifier
+          maxLength: 100
+          nullable: true
+          example: "C2960X"
+        serial:
+          type: string
+          description: Serial number
+          maxLength: 100
+          nullable: true
+          example: "FCW1234ABCD"
+        mgmt_ip:
+          type: string
+          format: ipv4
+          description: Management IP address
+          nullable: true
+          example: "192.168.1.10"
+        status:
+          type: string
+          description: Asset status
+          maxLength: 50
+          nullable: true
+          example: "active"
+        notes:
+          type: string
+          description: Additional notes
+          maxLength: 1000
+          nullable: true
+          example: "Primary core switch"
+        extras:
+          type: object
+          description: Additional unstructured data as JSON
+          additionalProperties: true
+          example: {"rack_unit": 1, "power_consumption": "150W"}
+        created_at:
+          type: string
+          format: date-time
+          description: Creation timestamp
+          readOnly: true
+          example: "2023-01-01T00:00:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update timestamp
+          readOnly: true
+          example: "2023-01-01T00:00:00Z"
+      required:
+        - id
+        - org_id
+        - site_id
+        - asset_type
+        - extras
+        - created_at
+        - updated_at
+      additionalProperties: false
+
+    AssetInput:
+      type: object
+      description: Input schema for creating or updating assets
+      properties:
+        site_id:
+          type: integer
+          format: int64
+          description: Site ID where the asset is located
+          example: 5
+        asset_type:
+          type: string
+          description: Type of asset
+          maxLength: 50
+          example: "switch"
+        name:
+          type: string
+          description: Asset name or hostname
+          maxLength: 255
+          nullable: true
+          example: "Core-Switch-01"
+        vendor:
+          type: string
+          description: Vendor or manufacturer
+          maxLength: 100
+          nullable: true
+          example: "Cisco"
+        model:
+          type: string
+          description: Model number or identifier
+          maxLength: 100
+          nullable: true
+          example: "C2960X"
+        serial:
+          type: string
+          description: Serial number
+          maxLength: 100
+          nullable: true
+          example: "FCW1234ABCD"
+        mgmt_ip:
+          type: string
+          format: ipv4
+          description: Management IP address
+          nullable: true
+          example: "192.168.1.10"
+        status:
+          type: string
+          description: Asset status
+          maxLength: 50
+          nullable: true
+          example: "active"
+        notes:
+          type: string
+          description: Additional notes
+          maxLength: 1000
+          nullable: true
+          example: "Primary core switch"
+        extras:
+          type: object
+          description: Additional unstructured data as JSON
+          additionalProperties: true
+          nullable: true
+          example: {"rack_unit": 1, "power_consumption": "150W"}
+        switch:
+          $ref: '#/components/schemas/AssetSwitchInput'
+        vlan:
+          $ref: '#/components/schemas/AssetVLANInput'
+      required:
+        - site_id
+        - asset_type
+      additionalProperties: false
+
+    AssetSwitch:
+      type: object
+      description: Switch-specific asset attributes
+      properties:
+        asset_id:
+          type: integer
+          format: int64
+          description: Reference to the parent asset
+          readOnly: true
+          example: 123
+        ports_total:
+          type: integer
+          description: Total number of ports
+          nullable: true
+          example: 48
+        poe:
+          type: boolean
+          description: Power over Ethernet support
+          nullable: true
+          example: true
+        uplink_info:
+          type: string
+          description: Uplink connection information
+          maxLength: 255
+          nullable: true
+          example: "2x 10G SFP+"
+        firmware:
+          type: string
+          description: Firmware version
+          maxLength: 100
+          nullable: true
+          example: "15.2(4)S7"
+      required:
+        - asset_id
+      additionalProperties: false
+
+    AssetSwitchInput:
+      type: object
+      description: Input schema for switch-specific attributes
+      properties:
+        ports_total:
+          type: integer
+          description: Total number of ports
+          nullable: true
+          example: 48
+        poe:
+          type: boolean
+          description: Power over Ethernet support
+          nullable: true
+          example: true
+        uplink_info:
+          type: string
+          description: Uplink connection information
+          maxLength: 255
+          nullable: true
+          example: "2x 10G SFP+"
+        firmware:
+          type: string
+          description: Firmware version
+          maxLength: 100
+          nullable: true
+          example: "15.2(4)S7"
+      additionalProperties: false
+
+    AssetVLAN:
+      type: object
+      description: VLAN-specific asset attributes
+      properties:
+        asset_id:
+          type: integer
+          format: int64
+          description: Reference to the parent asset
+          readOnly: true
+          example: 123
+        vlan_id:
+          type: integer
+          description: VLAN ID number
+          example: 100
+        subnet:
+          type: string
+          description: Subnet in CIDR notation
+          nullable: true
+          example: "192.168.100.0/24"
+        gateway:
+          type: string
+          format: ipv4
+          description: Gateway IP address
+          nullable: true
+          example: "192.168.100.1"
+        purpose:
+          type: string
+          description: VLAN purpose or description
+          maxLength: 255
+          nullable: true
+          example: "Guest Network"
+      required:
+        - asset_id
+        - vlan_id
+      additionalProperties: false
+
+    AssetVLANInput:
+      type: object
+      description: Input schema for VLAN-specific attributes
+      properties:
+        vlan_id:
+          type: integer
+          description: VLAN ID number
+          example: 100
+        subnet:
+          type: string
+          description: Subnet in CIDR notation
+          nullable: true
+          example: "192.168.100.0/24"
+        gateway:
+          type: string
+          format: ipv4
+          description: Gateway IP address
+          nullable: true
+          example: "192.168.100.1"
+        purpose:
+          type: string
+          description: VLAN purpose or description
+          maxLength: 255
+          nullable: true
+          example: "Guest Network"
+      required:
+        - vlan_id
+      additionalProperties: false
+
+    AssetWithSubtypes:
+      type: object
+      description: Asset with optional subtype data
+      allOf:
+        - $ref: '#/components/schemas/Asset'
+        - type: object
+          properties:
+            switch:
+              $ref: '#/components/schemas/AssetSwitch'
+            vlan:
+              $ref: '#/components/schemas/AssetVLAN'
+          additionalProperties: false
+
+    SiteAssetCategory:
+      type: object
+      description: Dynamic site asset category with count
+      properties:
+        org_id:
+          type: integer
+          format: int64
+          description: Organization ID
+          readOnly: true
+          example: 1
+        site_id:
+          type: integer
+          format: int64
+          description: Site ID
+          readOnly: true
+          example: 5
+        asset_type:
+          type: string
+          description: Asset type
+          readOnly: true
+          example: "switch"
+        asset_count:
+          type: integer
+          description: Number of assets of this type at the site
+          readOnly: true
+          example: 12
+      required:
+        - org_id
+        - site_id
+        - asset_type
+        - asset_count
       additionalProperties: false
 
     # Response Schemas
