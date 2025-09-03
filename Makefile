@@ -195,3 +195,64 @@ import-excel-test: ## Test Excel importer with sample data
 	@echo "Creating sample Excel file for testing..."
 	@echo "This would create a sample Excel file with test data"
 	@echo "Usage: make import-excel FILE=sample.xlsx ORG_ID=1 SITE_ID=5"
+
+.PHONY: test-upload
+test-upload: ## Test Excel upload endpoint (usage: make test-upload TK=token SITE=site_id FILE=path.xlsx)
+	@if [ -z "$(TK)" ] || [ -z "$(SITE)" ] || [ -z "$(FILE)" ]; then \
+		echo "Usage: make test-upload TK=token SITE=site_id FILE=path.xlsx"; \
+		echo "Example: make test-upload TK=eyJ... SITE=5 FILE=./testdata/sample.xlsx"; \
+		echo "Get token with: make login"; \
+		exit 1; \
+	fi
+	@echo "Testing Excel upload endpoint..."
+	curl -s -X POST http://localhost:8080/api/v1/imports/excel \
+		-H "Authorization: Bearer $(TK)" \
+		-F dry_run=true -F site_id=$(SITE) \
+		-F file=@$(FILE) | jq
+
+.PHONY: test-upload-dry-run
+test-upload-dry-run: ## Test Excel upload with dry run (usage: make test-upload-dry-run TK=token SITE=site_id FILE=path.xlsx)
+	@if [ -z "$(TK)" ] || [ -z "$(SITE)" ] || [ -z "$(FILE)" ]; then \
+		echo "Usage: make test-upload-dry-run TK=token SITE=site_id FILE=path.xlsx"; \
+		echo "Example: make test-upload-dry-run TK=eyJ... SITE=5 FILE=./testdata/sample.xlsx"; \
+		exit 1; \
+	fi
+	@echo "Testing Excel upload with dry run..."
+	curl -s -X POST http://localhost:8080/api/v1/imports/excel \
+		-H "Authorization: Bearer $(TK)" \
+		-F dry_run=true -F site_id=$(SITE) \
+		-F file=@$(FILE) | jq
+
+.PHONY: test-upload-real
+test-upload-real: ## Test Excel upload with real import (usage: make test-upload-real TK=token SITE=site_id FILE=path.xlsx)
+	@if [ -z "$(TK)" ] || [ -z "$(SITE)" ] || [ -z "$(FILE)" ]; then \
+		echo "Usage: make test-upload-real TK=token SITE=site_id FILE=path.xlsx"; \
+		echo "Example: make test-upload-real TK=eyJ... SITE=5 FILE=./testdata/sample.xlsx"; \
+		echo "WARNING: This will actually import data!"; \
+		exit 1; \
+	fi
+	@echo "Testing Excel upload with real import..."
+	@echo "WARNING: This will actually import data into the database!"
+	@read -p "Are you sure? (y/N): " confirm && [ "$$confirm" = "y" ]
+	curl -s -X POST http://localhost:8080/api/v1/imports/excel \
+		-H "Authorization: Bearer $(TK)" \
+		-F site_id=$(SITE) \
+		-F file=@$(FILE) | jq
+
+.PHONY: login
+login: ## Get authentication token (usage: make login EMAIL=email PASSWORD=password)
+	@if [ -z "$(EMAIL)" ] || [ -z "$(PASSWORD)" ]; then \
+		echo "Usage: make login EMAIL=email PASSWORD=password"; \
+		echo "Example: make login EMAIL=admin@example.com PASSWORD=password"; \
+		exit 1; \
+	fi
+	@echo "Getting authentication token..."
+	@TOKEN=$$(curl -s -X POST http://localhost:8080/api/v1/auth/login \
+		-H "Content-Type: application/json" \
+		-d "{\"email\":\"$(EMAIL)\",\"password\":\"$(PASSWORD)\"}" | jq -r '.token'); \
+	if [ "$$TOKEN" = "null" ] || [ -z "$$TOKEN" ]; then \
+		echo "Login failed. Check credentials and server status."; \
+		exit 1; \
+	fi; \
+	echo "Token: $$TOKEN"; \
+	echo "Use with: make test-upload TK=$$TOKEN SITE=5 FILE=./testdata/sample.xlsx"

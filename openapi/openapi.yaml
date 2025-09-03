@@ -1462,6 +1462,203 @@ paths:
         '500':
           $ref: '#/components/responses/InternalServerError'
 
+  # Excel Import Endpoints
+  /imports/excel:
+    post:
+      summary: Upload Excel to import assets for a site
+      description: |
+        Upload an Excel (.xlsx) file to import assets into the system for a specific site.
+        
+        ### Features
+        - **Mapping-driven Import**: Uses YAML configuration to map Excel columns to database fields
+        - **Dry Run Support**: Test imports without making changes using `dry_run=true`
+        - **Idempotent Upserts**: Updates existing assets or creates new ones based on natural keys
+        - **Error Handling**: Detailed error reporting with row-level feedback
+        - **Organization Isolation**: Imports are scoped to the authenticated user's organization
+        - **Role-based Access**: Requires `project_admin` or `org_admin` role
+        
+        ### File Requirements
+        - **Format**: Only `.xlsx` files are accepted
+        - **Size Limit**: Maximum 20 MB file size
+        - **Content Type**: Must be `multipart/form-data`
+        
+        ### Import Process
+        1. **Validation**: File format and size validation
+        2. **Mapping**: Excel headers mapped to database fields using YAML configuration
+        3. **Parsing**: Data types parsed (IP, CIDR, INT, BOOL, TIMESTAMP, TEXT)
+        4. **Upsert**: Assets created or updated based on natural keys (serial, name, etc.)
+        5. **Subtypes**: Switch and VLAN data stored in subtype tables when applicable
+        6. **Extras**: Unknown columns stored in JSONB `extras` field
+        
+        ### Use Cases
+        - **Bulk Asset Import**: Import large inventories from Excel spreadsheets
+        - **Data Migration**: Migrate assets from other systems
+        - **Regular Updates**: Update existing asset information
+        - **Testing**: Use dry-run mode to validate data before import
+      tags: [Imports]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, site_id]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: Excel .xlsx file containing asset data
+                site_id:
+                  type: integer
+                  format: int64
+                  description: Target site ID for the imported assets
+                  example: 5
+                dry_run:
+                  type: boolean
+                  description: If true, perform validation without making changes
+                  default: false
+                  example: false
+                mapping:
+                  type: string
+                  description: Optional mapping configuration path (defaults to configs/mapping/mbip_equipment.yaml)
+                  example: "configs/mapping/mbip_equipment.yaml"
+                max_errors:
+                  type: integer
+                  description: Maximum number of errors before stopping import (default 50)
+                  minimum: 1
+                  maximum: 1000
+                  default: 50
+                  example: 50
+      responses:
+        '200':
+          description: Import completed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ImportSummary'
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+              examples:
+                success:
+                  summary: Successful import
+                  value:
+                    data:
+                      inserted: 15
+                      updated: 3
+                      skipped: 2
+                      errors: 0
+                      dry_run: false
+                      sheets:
+                        - name: "Equipment"
+                          inserted: 15
+                          updated: 3
+                          skipped: 2
+                          errors: 0
+                    meta:
+                      timestamp: "2024-01-15T10:30:00Z"
+                      version: "1.0.0"
+                dry_run:
+                  summary: Dry run validation
+                  value:
+                    data:
+                      inserted: 0
+                      updated: 0
+                      skipped: 0
+                      errors: 2
+                      dry_run: true
+                      sheets:
+                        - name: "Equipment"
+                          inserted: 0
+                          updated: 0
+                          skipped: 0
+                          errors: 2
+                          error_samples:
+                            - sheet: "Equipment"
+                              row: 5
+                              message: "Invalid IP address: 192.168.1.999"
+                            - sheet: "Equipment"
+                              row: 12
+                              message: "Required field 'name' is missing"
+                    meta:
+                      timestamp: "2024-01-15T10:30:00Z"
+                      version: "1.0.0"
+        '400':
+          description: Bad request - invalid file format, missing parameters, or file too large
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                invalid_file:
+                  summary: Invalid file format
+                  value:
+                    error: "INVALID_FILE_FORMAT"
+                    message: "only .xlsx files are accepted"
+                missing_site_id:
+                  summary: Missing site_id
+                  value:
+                    error: "MISSING_PARAMETER"
+                    message: "site_id is required and must be a positive integer"
+                file_too_large:
+                  summary: File too large
+                  value:
+                    error: "FILE_TOO_LARGE"
+                    message: "file size exceeds 20 MB limit"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Forbidden - insufficient permissions (requires project_admin or org_admin role)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                insufficient_permissions:
+                  summary: Insufficient permissions
+                  value:
+                    error: "INSUFFICIENT_PERMISSIONS"
+                    message: "project_admin or org_admin role required"
+        '422':
+          description: Import failed - validation errors or processing failures
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "IMPORT_FAILED"
+                  details:
+                    type: string
+                    example: "too many errors (52), stopping import"
+                  data:
+                    $ref: '#/components/schemas/ImportSummary'
+              examples:
+                too_many_errors:
+                  summary: Too many errors
+                  value:
+                    error: "IMPORT_FAILED"
+                    details: "too many errors (52), stopping import"
+                    data:
+                      inserted: 5
+                      updated: 2
+                      skipped: 10
+                      errors: 52
+                      dry_run: false
+                      sheets:
+                        - name: "Equipment"
+                          inserted: 5
+                          updated: 2
+                          skipped: 10
+                          errors: 52
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
 components:
   securitySchemes:
     bearerAuth:
@@ -2307,6 +2504,105 @@ components:
         - site_id
         - asset_type
         - asset_count
+      additionalProperties: false
+
+    # Import Schemas
+    RowError:
+      type: object
+      description: Error that occurred during row processing
+      properties:
+        sheet:
+          type: string
+          description: Name of the Excel sheet where the error occurred
+          example: "Equipment"
+        row:
+          type: integer
+          description: Row number where the error occurred (1-based)
+          example: 5
+        message:
+          type: string
+          description: Error message describing what went wrong
+          example: "Invalid IP address: 192.168.1.999"
+      required:
+        - sheet
+        - row
+        - message
+      additionalProperties: false
+
+    SheetSummary:
+      type: object
+      description: Import statistics for a single Excel sheet
+      properties:
+        name:
+          type: string
+          description: Name of the Excel sheet
+          example: "Equipment"
+        inserted:
+          type: integer
+          description: Number of new assets created
+          example: 15
+        updated:
+          type: integer
+          description: Number of existing assets updated
+          example: 3
+        skipped:
+          type: integer
+          description: Number of rows skipped (empty or invalid)
+          example: 2
+        errors:
+          type: integer
+          description: Number of rows with errors
+          example: 0
+        error_samples:
+          type: array
+          description: Sample error details (limited to first few errors)
+          items:
+            $ref: '#/components/schemas/RowError'
+          maxItems: 10
+      required:
+        - name
+        - inserted
+        - updated
+        - skipped
+        - errors
+      additionalProperties: false
+
+    ImportSummary:
+      type: object
+      description: Overall import operation summary
+      properties:
+        inserted:
+          type: integer
+          description: Total number of new assets created across all sheets
+          example: 15
+        updated:
+          type: integer
+          description: Total number of existing assets updated across all sheets
+          example: 3
+        skipped:
+          type: integer
+          description: Total number of rows skipped across all sheets
+          example: 2
+        errors:
+          type: integer
+          description: Total number of errors across all sheets
+          example: 0
+        sheets:
+          type: array
+          description: Import statistics for each processed sheet
+          items:
+            $ref: '#/components/schemas/SheetSummary'
+        dry_run:
+          type: boolean
+          description: Whether this was a dry run (no actual changes made)
+          example: false
+      required:
+        - inserted
+        - updated
+        - skipped
+        - errors
+        - sheets
+        - dry_run
       additionalProperties: false
 
     # Response Schemas

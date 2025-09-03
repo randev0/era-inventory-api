@@ -137,6 +137,84 @@ psql "$TEST_DATABASE_URL" -f db/seeds/001_minimal.sql
 INTEGRATION=1 go test ./... -v -tags=integration
 ```
 
+## 📊 Excel Upload & Import
+
+The API supports bulk importing assets from Excel files through a mapping-driven import system.
+
+### Features
+- **Mapping-driven Import**: Uses YAML configuration to map Excel columns to database fields
+- **Dry Run Support**: Test imports without making changes using `dry_run=true`
+- **Idempotent Upserts**: Updates existing assets or creates new ones based on natural keys
+- **Error Handling**: Detailed error reporting with row-level feedback
+- **Organization Isolation**: Imports are scoped to the authenticated user's organization
+- **Role-based Access**: Requires `project_admin` or `org_admin` role
+
+### Upload Excel File
+
+```bash
+# Get authentication token
+make login EMAIL=admin@example.com PASSWORD=password
+
+# Test with dry run (no changes made)
+make test-upload-dry-run TK=your-token SITE=5 FILE=./testdata/sample.xlsx
+
+# Real import (makes actual changes)
+make test-upload-real TK=your-token SITE=5 FILE=./testdata/sample.xlsx
+```
+
+### Manual curl Examples
+
+```bash
+# Dry run import
+curl -X POST http://localhost:8080/api/v1/imports/excel \
+  -H "Authorization: Bearer $TOKEN" \
+  -F dry_run=true \
+  -F site_id=5 \
+  -F file=@./data/Master\ List\ -\ MBIP\ MEDINI.xlsx | jq
+
+# Real import
+curl -X POST http://localhost:8080/api/v1/imports/excel \
+  -H "Authorization: Bearer $TOKEN" \
+  -F site_id=5 \
+  -F file=@./data/Master\ List\ -\ MBIP\ MEDINI.xlsx | jq
+
+# With custom mapping and error limit
+curl -X POST http://localhost:8080/api/v1/imports/excel \
+  -H "Authorization: Bearer $TOKEN" \
+  -F site_id=5 \
+  -F mapping=configs/mapping/custom.yaml \
+  -F max_errors=100 \
+  -F file=@./data/assets.xlsx | jq
+```
+
+### File Requirements
+- **Format**: Only `.xlsx` files are accepted
+- **Size Limit**: Maximum 20 MB file size
+- **Content Type**: Must be `multipart/form-data`
+
+### Import Process
+1. **Validation**: File format and size validation
+2. **Mapping**: Excel headers mapped to database fields using YAML configuration
+3. **Parsing**: Data types parsed (IP, CIDR, INT, BOOL, TIMESTAMP, TEXT)
+4. **Upsert**: Assets created or updated based on natural keys (serial, name, etc.)
+5. **Subtypes**: Switch and VLAN data stored in subtype tables when applicable
+6. **Extras**: Unknown columns stored in JSONB `extras` field
+
+### CLI Tool Alternative
+
+You can also use the command-line importer tool:
+
+```bash
+# Build the tool
+make build-import-excel
+
+# Import with dry run
+./bin/import-excel --file=./data/assets.xlsx --org-id=1 --site-id=5 --dry-run
+
+# Real import
+./bin/import-excel --file=./data/assets.xlsx --org-id=1 --site-id=5
+```
+
 ## 🔧 Development Tools
 
 ### Makefile Targets

@@ -11,8 +11,10 @@ import (
 
 	"era-inventory-api/internal/auth"
 	"era-inventory-api/internal/config"
+	"era-inventory-api/internal/handlers"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
@@ -21,6 +23,7 @@ var openapiFS embed.FS
 
 type Server struct {
 	DB         *sql.DB
+	Pool       *pgxpool.Pool
 	Router     *chi.Mux
 	JWTManager *auth.JWTManager
 	Metrics    *Metrics
@@ -38,6 +41,12 @@ func NewServer(dsn string, cfg *config.Config) *Server {
 		log.Fatal("Database ping failed:", err)
 	}
 
+	// Also create a pgxpool for the importer
+	pool, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		log.Fatal("Failed to create pgxpool:", err)
+	}
+
 	// Initialize JWT manager
 	jwtManager := auth.NewJWTManager(cfg.JWTSecret, cfg.JWTIssuer, cfg.JWTAudience, cfg.JWTExpiry)
 
@@ -51,6 +60,7 @@ func NewServer(dsn string, cfg *config.Config) *Server {
 
 	s := &Server{
 		DB:         db,
+		Pool:       pool,
 		Router:     chi.NewRouter(),
 		JWTManager: jwtManager,
 		Metrics:    metrics,
@@ -230,6 +240,10 @@ func (s *Server) mountProtectedRoutes(r chi.Router) {
 
 	// Site asset categories
 	r.Get("/sites/{id}/asset-categories", s.getSiteAssetCategories)
+
+	// Excel import - require project_admin/org_admin
+	importsHandler := handlers.NewImportsHandler(s.Pool)
+	r.Post("/imports/excel", auth.MustRole("org_admin", "project_admin")(http.HandlerFunc(importsHandler.UploadExcel)).(http.HandlerFunc))
 
 	// User management - org_admin only, with multi-tenant logic
 	r.Post("/users", auth.MustRole("org_admin")(http.HandlerFunc(s.createUser)).(http.HandlerFunc))
